@@ -28,7 +28,7 @@ export const errorHandler = (
   let { statusCode = 500, message } = error;
 
   // Log error details
-  logger.error({
+  logger.error('Application error occurred', {
     error: error.message,
     stack: error.stack,
     url: req.url,
