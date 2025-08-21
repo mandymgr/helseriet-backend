@@ -14,6 +14,10 @@ import orderRoutes from '@/routes/order.routes';
 import categoryRoutes from '@/routes/category.routes';
 import cartRoutes from '@/routes/cart.routes';
 import reviewRoutes from '@/routes/review.routes';
+import paymentRoutes from '@/routes/payments';
+import homepageRoutes from '@/routes/homepage';
+import adminProtectionRoutes from '@/routes/admin-protection';
+import { productController } from '@/controllers/products';
 
 const app = express();
 
@@ -57,6 +61,15 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/homepage', homepageRoutes);
+app.use('/api/admin-protection', adminProtectionRoutes);
+
+// Bundles endpoint (filter products by isBundle=true)
+app.get('/api/bundles', (req, res, next) => {
+  req.query.isBundle = 'true';
+  return productController.getProducts(req, res, next);
+});
 
 // 404 handler
 app.use(notFoundHandler);

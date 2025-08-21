@@ -14,7 +14,9 @@ class ProductController {
         status = 'ACTIVE',
         search,
         sortBy = 'createdAt',
-        sortOrder = 'desc'
+        sortOrder = 'desc',
+        isBundle,
+        featured
       } = req.query;
 
       const skip = (Number(page) - 1) * Number(limit);
@@ -40,6 +42,14 @@ class ProductController {
         ];
       }
 
+      if (isBundle !== undefined) {
+        where.isBundle = isBundle === 'true';
+      }
+
+      if (featured !== undefined) {
+        where.isFeatured = featured === 'true';
+      }
+
       // Get products with category and images
       const [products, totalCount] = await Promise.all([
         prisma.product.findMany({
@@ -54,8 +64,10 @@ class ProductController {
               select: { id: true, name: true, slug: true }
             },
             images: {
-              select: { id: true, url: true, altText: true, sortOrder: true },
-              orderBy: { sortOrder: 'asc' }
+              select: { id: true, url: true, altText: true, sortOrder: true, imageType: true, isPrimary: true },
+              where: { imageType: 'FRONT' },
+              orderBy: { isPrimary: 'desc' },
+              take: 1
             },
             _count: {
               select: { reviews: true }
@@ -100,9 +112,97 @@ class ProductController {
 
   async getProduct(req: Request, res: Response, next: NextFunction) {
     try {
+      const { id } = req.params;
+
+      if (!id) {
+        throw new AppError('Produkt ID er påkrevd', 400);
+      }
+
+      const product = await prisma.product.findUnique({
+        where: { 
+          id,
+          isActive: true,
+          status: 'ACTIVE'
+        },
+        include: {
+          category: {
+            select: { id: true, name: true, slug: true }
+          },
+          images: {
+            select: { 
+              id: true, 
+              url: true, 
+              altText: true, 
+              sortOrder: true,
+              imageType: true,
+              isPrimary: true
+            },
+            orderBy: [
+              { isPrimary: 'desc' },
+              { imageType: 'asc' },
+              { sortOrder: 'asc' }
+            ]
+          },
+          reviews: {
+            select: {
+              id: true,
+              rating: true,
+              title: true,
+              comment: true,
+              createdAt: true,
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true
+                }
+              }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 10
+          },
+          _count: {
+            select: { reviews: true }
+          },
+          bundleItems: {
+            select: {
+              id: true,
+              quantity: true,
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  price: true,
+                  images: {
+                    select: { url: true, altText: true },
+                    where: { imageType: 'FRONT' },
+                    take: 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!product) {
+        throw new AppError('Produkt ikke funnet', 404);
+      }
+
+      // Calculate average rating
+      const avgRating = await prisma.review.aggregate({
+        where: { productId: product.id },
+        _avg: { rating: true }
+      });
+
+      const productWithRating = {
+        ...product,
+        averageRating: avgRating._avg.rating ? Number(avgRating._avg.rating.toFixed(1)) : 0,
+        totalReviews: product._count.reviews
+      };
+
       res.status(200).json({
         success: true,
-        message: 'Get product endpoint - to be implemented'
+        data: productWithRating
       });
     } catch (error) {
       next(error);
@@ -244,7 +344,7 @@ class ProductController {
 
   async uploadProductImages(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const { productId } = req.params;
+      const { id: productId } = req.params;
       
       if (!productId) {
         throw new AppError('Product ID is required', 400);
@@ -279,7 +379,9 @@ class ProductController {
             productId,
             url: uploadResult.secure_url,
             altText: `${product.name} - bilde ${index + 1}`,
-            sortOrder: index
+            sortOrder: index,
+            imageType: index === 0 ? 'FRONT' : 'GENERAL', // First image is assumed to be front
+            isPrimary: index === 0
           }
         });
       });

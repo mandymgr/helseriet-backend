@@ -38,3 +38,20 @@ export const loginValidation = [
     .notEmpty()
     .withMessage('Password is required')
 ];
+
+export const forgotPasswordValidation = [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email address')
+];
+
+export const resetPasswordValidation = [
+  body('token')
+    .notEmpty()
+    .withMessage('Reset token is required'),
+  
+  body('newPassword')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters long')
+];

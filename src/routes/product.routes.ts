@@ -15,6 +15,13 @@ router.get('/:id', productController.getProduct);
 // GET /api/products/search
 router.get('/search', productController.searchProducts);
 
+// GET /api/bundles - Get bundle products only
+router.get('/bundles', (req, res, next) => {
+  // Add isBundle filter to query params
+  req.query.isBundle = 'true';
+  return productController.getProducts(req, res, next);
+});
+
 // Protected routes (Admin only)
 router.use(authenticate, authorize(['ADMIN', 'SUPER_ADMIN']));
 

@@ -24,6 +24,22 @@ class CartController {
                   images: {
                     orderBy: { sortOrder: 'asc' },
                     take: 1
+                  },
+                  bundleItems: {
+                    include: {
+                      product: {
+                        select: {
+                          id: true,
+                          name: true,
+                          price: true,
+                          images: {
+                            select: { url: true, altText: true },
+                            where: { imageType: 'FRONT' },
+                            take: 1
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -44,6 +60,22 @@ class CartController {
                     images: {
                       orderBy: { sortOrder: 'asc' },
                       take: 1
+                    },
+                    bundleItems: {
+                      include: {
+                        product: {
+                          select: {
+                            id: true,
+                            name: true,
+                            price: true,
+                            images: {
+                              select: { url: true, altText: true },
+                              where: { imageType: 'FRONT' },
+                              take: 1
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -77,16 +109,33 @@ class CartController {
 
       // Verify product exists and is active
       const product = await prisma.product.findUnique({
-        where: { id: productId }
+        where: { id: productId },
+        include: {
+          bundleItems: {
+            include: {
+              product: true
+            }
+          }
+        }
       });
 
       if (!product || !product.isActive) {
         throw new AppError('Produkt ikke funnet eller ikke tilgjengelig', 404);
       }
 
-      // Check stock
-      if (product.quantity < quantity) {
-        throw new AppError('Ikke nok på lager', 400);
+      // For bundles, check stock of all bundled items
+      if (product.isBundle && product.bundleItems.length > 0) {
+        for (const bundleItem of product.bundleItems) {
+          const requiredQuantity = bundleItem.quantity * quantity;
+          if (bundleItem.product.quantity < requiredQuantity) {
+            throw new AppError(`Ikke nok på lager for ${bundleItem.product.name} i bunten`, 400);
+          }
+        }
+      } else {
+        // Check stock for regular products
+        if (product.quantity < quantity) {
+          throw new AppError('Ikke nok på lager', 400);
+        }
       }
 
       // Get or create cart
@@ -114,8 +163,19 @@ class CartController {
       if (existingItem) {
         // Update quantity
         const newQuantity = existingItem.quantity + quantity;
-        if (product.quantity < newQuantity) {
-          throw new AppError('Ikke nok på lager', 400);
+        
+        // Check stock again for the new total quantity
+        if (product.isBundle && product.bundleItems.length > 0) {
+          for (const bundleItem of product.bundleItems) {
+            const requiredQuantity = bundleItem.quantity * newQuantity;
+            if (bundleItem.product.quantity < requiredQuantity) {
+              throw new AppError(`Ikke nok på lager for ${bundleItem.product.name} i bunten`, 400);
+            }
+          }
+        } else {
+          if (product.quantity < newQuantity) {
+            throw new AppError('Ikke nok på lager', 400);
+          }
         }
 
         cartItem = await prisma.cartItem.update({
@@ -190,7 +250,15 @@ class CartController {
           cart: { userId }
         },
         include: {
-          product: true
+          product: {
+            include: {
+              bundleItems: {
+                include: {
+                  product: true
+                }
+              }
+            }
+          }
         }
       });
 
@@ -198,9 +266,18 @@ class CartController {
         throw new AppError('Handlekurv-element ikke funnet', 404);
       }
 
-      // Check stock
-      if (cartItem.product.quantity < quantity) {
-        throw new AppError('Ikke nok på lager', 400);
+      // Check stock for bundles or regular products
+      if (cartItem.product.isBundle && cartItem.product.bundleItems.length > 0) {
+        for (const bundleItem of cartItem.product.bundleItems) {
+          const requiredQuantity = bundleItem.quantity * quantity;
+          if (bundleItem.product.quantity < requiredQuantity) {
+            throw new AppError(`Ikke nok på lager for ${bundleItem.product.name} i bunten`, 400);
+          }
+        }
+      } else {
+        if (cartItem.product.quantity < quantity) {
+          throw new AppError('Ikke nok på lager', 400);
+        }
       }
 
       const updatedItem = await prisma.cartItem.update({

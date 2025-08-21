@@ -150,6 +150,69 @@ async function main() {
 
   console.log(`✅ Created ${products.length} products`);
 
+  // Create bundle product
+  const healthBundle = await prisma.product.upsert({
+    where: { sku: 'SYNERGY-HEALTH-BUNDLE' },
+    update: {},
+    create: {
+      name: 'SYNERGY - Premium Helse Bundle',
+      slug: 'synergy-premium-helse-bundle',
+      description: 'En komplett pakke med våre mest populære kosttilskudd for optimal helse. Inneholder Vitamin D3, Magnesium, Omega-3 og Probiotika.',
+      shortDescription: 'Komplett helsepakke med 4 essensielle kosttilskudd',
+      sku: 'SYNERGY-HEALTH-BUNDLE',
+      price: 1599.00,
+      comparePrice: 1996.00,
+      costPrice: 770.00,
+      quantity: 10,
+      categoryId: categories[0].id, // Vitaminer
+      status: 'ACTIVE',
+      isActive: true,
+      isFeatured: true,
+      isBundle: true,
+      tags: ['bundle', 'helse', 'komplett', 'besparelse'],
+      metaTitle: 'SYNERGY Premium Helse Bundle - 20% besparelse',
+      metaDescription: 'Spar 20% på våre beste kosttilskudd. Komplett helsepakke med Vitamin D3, Magnesium, Omega-3 og Probiotika.'
+    }
+  });
+
+  // Create bundle items
+  const bundleItems = await Promise.all([
+    prisma.bundleItem.create({
+      data: {
+        bundleId: healthBundle.id,
+        productId: products[0].id, // Vitamin D3
+        quantity: 1,
+        discountPercent: 20.00
+      }
+    }),
+    prisma.bundleItem.create({
+      data: {
+        bundleId: healthBundle.id,
+        productId: products[1].id, // Magnesium
+        quantity: 1,
+        discountPercent: 20.00
+      }
+    }),
+    prisma.bundleItem.create({
+      data: {
+        bundleId: healthBundle.id,
+        productId: products[2].id, // Omega-3
+        quantity: 1,
+        discountPercent: 20.00
+      }
+    }),
+    prisma.bundleItem.create({
+      data: {
+        bundleId: healthBundle.id,
+        productId: products[3].id, // Probiotika
+        quantity: 1,
+        discountPercent: 20.00
+      }
+    })
+  ]);
+
+  console.log(`✅ Created bundle with ${bundleItems.length} items`);
+
   // Create admin user
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@helseriet.no' },

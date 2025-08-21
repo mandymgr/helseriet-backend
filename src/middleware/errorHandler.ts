@@ -1,18 +1,27 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '@/utils/logger';
+import { ApiError, ErrorCodes, ErrorDetail, ErrorSeverity } from '@helseriet/shared-types';
 
-export interface ApiError extends Error {
-  statusCode: number;
-  isOperational: boolean;
-}
+export class AppError extends Error {
+  public statusCode: number;
+  public code: string;
+  public errors: ErrorDetail[];
+  public severity: ErrorSeverity;
+  public isOperational: boolean;
 
-export class AppError extends Error implements ApiError {
-  statusCode: number;
-  isOperational: boolean;
-
-  constructor(message: string, statusCode: number = 500, isOperational: boolean = true) {
+  constructor(
+    message: string,
+    statusCode: number = 500,
+    code: string = ErrorCodes.INTERNAL_SERVER_ERROR,
+    errors: ErrorDetail[] = [],
+    severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+    isOperational: boolean = true
+  ) {
     super(message);
     this.statusCode = statusCode;
+    this.code = code;
+    this.errors = errors;
+    this.severity = severity;
     this.isOperational = isOperational;
 
     Error.captureStackTrace(this, this.constructor);
@@ -20,16 +29,89 @@ export class AppError extends Error implements ApiError {
 }
 
 export const errorHandler = (
-  error: ApiError,
+  error: Error | AppError,
   req: Request,
   res: Response,
   next: NextFunction
 ): void => {
-  let { statusCode = 500, message } = error;
+  let statusCode = 500;
+  let code = ErrorCodes.INTERNAL_SERVER_ERROR;
+  let message = 'Internal Server Error';
+  let errors: ErrorDetail[] = [];
+  let severity = ErrorSeverity.HIGH;
 
-  // Log error details
-  logger.error('Error occurred', {
-    error: error.message,
+  // Handle custom AppError
+  if (error instanceof AppError) {
+    statusCode = error.statusCode;
+    code = error.code as any;
+    message = error.message;
+    errors = error.errors;
+    severity = error.severity;
+  }
+  // Handle Prisma errors
+  else if (error.name === 'PrismaClientKnownRequestError') {
+    const prismaError = error as any;
+    switch (prismaError.code) {
+      case 'P2002':
+        statusCode = 409;
+        code = ErrorCodes.CONFLICT;
+        message = 'Resource already exists';
+        errors = [{ message: 'A record with this data already exists' }];
+        severity = ErrorSeverity.LOW;
+        break;
+      case 'P2025':
+        statusCode = 404;
+        code = ErrorCodes.NOT_FOUND;
+        message = 'Resource not found';
+        errors = [{ message: 'The requested resource was not found' }];
+        severity = ErrorSeverity.LOW;
+        break;
+      case 'P2003':
+        statusCode = 400;
+        code = ErrorCodes.VALIDATION_ERROR;
+        message = 'Foreign key constraint failed';
+        errors = [{ message: 'Related resource not found' }];
+        severity = ErrorSeverity.LOW;
+        break;
+      default:
+        statusCode = 500;
+        code = ErrorCodes.DATABASE_ERROR;
+        message = 'Database error';
+        errors = [{ message: 'A database error occurred' }];
+        severity = ErrorSeverity.HIGH;
+    }
+  }
+  // Handle validation errors
+  else if (error.name === 'ValidationError') {
+    statusCode = 400;
+    code = ErrorCodes.VALIDATION_ERROR;
+    message = 'Validation failed';
+    severity = ErrorSeverity.LOW;
+  }
+  // Handle JWT errors
+  else if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+    statusCode = 401;
+    code = ErrorCodes.UNAUTHORIZED;
+    message = 'Authentication failed';
+    errors = [{ message: 'Invalid or expired token' }];
+    severity = ErrorSeverity.MEDIUM;
+  }
+  // Handle unknown errors
+  else {
+    if (process.env.NODE_ENV === 'production') {
+      message = 'Something went wrong';
+      errors = [{ message: 'An unexpected error occurred' }];
+    } else {
+      message = error.message || 'Internal Server Error';
+      errors = [{ message: error.message || 'Unknown error' }];
+    }
+  }
+
+  // Log error with severity
+  logger.error(`${severity} ERROR:`, {
+    message,
+    code,
+    statusCode,
     stack: error.stack,
     url: req.url,
     method: req.method,
@@ -37,55 +119,15 @@ export const errorHandler = (
     userAgent: req.get('User-Agent')
   });
 
-  // Handle Prisma errors
-  if (error.name === 'PrismaClientKnownRequestError') {
-    const prismaError = error as any;
-    switch (prismaError.code) {
-      case 'P2002':
-        statusCode = 409;
-        message = 'A record with this data already exists';
-        break;
-      case 'P2025':
-        statusCode = 404;
-        message = 'Record not found';
-        break;
-      case 'P2003':
-        statusCode = 400;
-        message = 'Foreign key constraint failed';
-        break;
-      default:
-        statusCode = 400;
-        message = 'Database operation failed';
-    }
-  }
-
-  // Handle validation errors
-  if (error.name === 'ValidationError') {
-    statusCode = 400;
-    message = 'Validation failed';
-  }
-
-  // Handle JWT errors
-  if (error.name === 'JsonWebTokenError') {
-    statusCode = 401;
-    message = 'Invalid token';
-  }
-
-  if (error.name === 'TokenExpiredError') {
-    statusCode = 401;
-    message = 'Token expired';
-  }
-
-  // Don't leak error details in production
-  if (process.env.NODE_ENV === 'production' && !error.isOperational) {
-    message = 'Something went wrong!';
-  }
-
-  res.status(statusCode).json({
+  // Send standardized error response
+  const errorResponse: ApiError = {
     success: false,
-    error: {
-      message,
-      ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
-    }
-  });
+    message,
+    code,
+    errors,
+    timestamp: new Date().toISOString(),
+    path: req.path
+  };
+
+  res.status(statusCode).json(errorResponse);
 };
