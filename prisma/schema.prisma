@@ -28,6 +28,10 @@ model User {
   refreshTokens RefreshToken[]
   passwordResetTokens PasswordResetToken[]
 
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -51,6 +55,9 @@ model Address {
   billingOrders  Order[]     @relation("BillingAddress")
   shippingOrders Order[]     @relation("ShippingAddress")
 
+  @@index([userId])
+  @@index([type])
+  @@index([isDefault])
   @@map("addresses")
 }
 
@@ -69,6 +76,10 @@ model Category {
   children    Category[] @relation("CategoryHierarchy")
   products    Product[]
 
+  @@index([slug])
+  @@index([parentId])
+  @@index([isActive])
+  @@index([sortOrder])
   @@map("categories")
 }
 
@@ -108,6 +119,18 @@ model Product {
   reviews            Review[]
   wishlistItems      Wishlist[]
 
+  @@index([slug])
+  @@index([sku])
+  @@index([categoryId])
+  @@index([status])
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([isBundle])
+  @@index([price])
+  @@index([createdAt])
+  @@index([categoryId, isActive, status])
+  @@index([isActive, status, isFeatured])
+  @@index([categoryId, price])
   @@map("products")
 }
 
@@ -123,6 +146,12 @@ model ProductImage {
   createdAt        DateTime   @default(now())
   product          Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
 
+  @@index([productId])
+  @@index([imageType])
+  @@index([isPrimary])
+  @@index([sortOrder])
+  @@index([productId, imageType])
+  @@index([productId, isPrimary])
   @@map("product_images")
 }
 
@@ -137,6 +166,8 @@ model BundleItem {
   product         Product  @relation("IncludedProduct", fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([bundleId, productId])
+  @@index([bundleId])
+  @@index([productId])
   @@map("bundle_items")
 }
 
@@ -164,6 +195,8 @@ model Cart {
   items     CartItem[]
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([updatedAt])
   @@map("carts")
 }
 
@@ -178,6 +211,9 @@ model CartItem {
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([cartId, productId])
+  @@index([cartId])
+  @@index([productId])
+  @@index([updatedAt])
   @@map("cart_items")
 }
 
@@ -223,6 +259,17 @@ model Order {
   payments           Payment[]
   shipments          Shipment[]
 
+  @@index([orderNumber])
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([fulfillmentStatus])
+  @@index([email])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@index([status, paymentStatus])
   @@map("orders")
 }
 
@@ -239,6 +286,9 @@ model OrderItem {
   order        Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product      Product @relation(fields: [productId], references: [id])
 
+  @@index([orderId])
+  @@index([productId])
+  @@index([productSku])
   @@map("order_items")
 }
 
@@ -258,6 +308,14 @@ model Payment {
   updatedAt     DateTime      @updatedAt
   order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@index([orderId])
+  @@index([status])
+  @@index([method])
+  @@index([provider])
+  @@index([transactionId])
+  @@index([createdAt])
+  @@index([confirmedAt])
+  @@index([orderId, status])
   @@map("payments")
 }
 
@@ -274,6 +332,13 @@ model Shipment {
   updatedAt      DateTime       @updatedAt
   order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@index([orderId])
+  @@index([trackingNumber])
+  @@index([status])
+  @@index([carrier])
+  @@index([shippedAt])
+  @@index([deliveredAt])
+  @@index([createdAt])
   @@map("shipments")
 }
 
@@ -291,6 +356,13 @@ model Review {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, productId])
+  @@index([productId])
+  @@index([userId])
+  @@index([rating])
+  @@index([isVerified])
+  @@index([createdAt])
+  @@index([productId, rating])
+  @@index([productId, isVerified])
   @@map("reviews")
 }
 
@@ -303,6 +375,9 @@ model Wishlist {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+  @@index([createdAt])
   @@map("wishlists")
 }
 
@@ -319,6 +394,10 @@ model HomepageConfig {
   updatedBy         String?
   featuredProduct   Product? @relation("FeaturedProduct", fields: [featuredProductId], references: [id])
 
+  @@index([isActive])
+  @@index([featuredProductId])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("homepage_configs")
 }
 
@@ -394,6 +473,10 @@ model RefreshToken {
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([userId, expiresAt])
   @@map("refresh_tokens")
 }
 
@@ -407,6 +490,12 @@ model PasswordResetToken {
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([used])
+  @@index([userId, used])
+  @@index([expiresAt, used])
   @@map("password_reset_tokens")
 }
 

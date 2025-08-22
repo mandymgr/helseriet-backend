@@ -62,6 +62,15 @@ class AuthController {
         user.role
       );
 
+      // Send welcome email (non-blocking)
+      try {
+        const { emailService: emailServiceConfig } = await import('@/config/email');
+        await emailServiceConfig.sendWelcomeEmail(user.email, user.firstName || undefined);
+      } catch (emailError) {
+        // Log but don't fail registration if email fails
+        console.error('Failed to send welcome email:', emailError);
+      }
+
       res.status(201).json({
         success: true,
         message: 'Bruker opprettet',

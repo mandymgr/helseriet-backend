@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { vippsService, paymentService } from '@/services/payments';
 import { AppError } from '@/middleware/errorHandler';
-import { logger } from '@/utils/logger';
+import { logger } from '@/utils/logger.simple';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

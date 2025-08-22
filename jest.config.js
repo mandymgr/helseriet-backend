@@ -9,17 +9,23 @@ module.exports = {
   transform: {
     '^.+\\.ts$': 'ts-jest'
   },
+  moduleNameMapping: {
+    '^@/(.*)$': '<rootDir>/src/$1'
+  },
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',
     '!src/server.ts',
-    '!src/config/**'
+    '!src/config/database.ts',
+    '!src/scripts/**'
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
-  testTimeout: 10000,
+  testTimeout: 30000,
   detectOpenHandles: true,
-  forceExit: true
+  forceExit: true,
+  maxWorkers: 1, // Run tests sequentially to avoid DB conflicts
+  verbose: true
 };

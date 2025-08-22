@@ -6,7 +6,7 @@
  */
 
 import { refreshTokenService } from '@/services/auth/refreshToken.service';
-import { logger } from '@/utils/logger';
+import { logger } from '@/utils/logger.simple';
 
 async function cleanupExpiredTokens() {
   try {

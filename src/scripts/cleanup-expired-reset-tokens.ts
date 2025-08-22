@@ -6,7 +6,7 @@
  */
 
 import { emailService } from '@/services/email/email.service';
-import { logger } from '@/utils/logger';
+import { logger } from '@/utils/logger.simple';
 
 async function cleanupExpiredResetTokens() {
   try {

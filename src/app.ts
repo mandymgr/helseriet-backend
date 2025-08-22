@@ -17,6 +17,7 @@ import reviewRoutes from '@/routes/review.routes';
 import paymentRoutes from '@/routes/payments';
 import homepageRoutes from '@/routes/homepage';
 import adminProtectionRoutes from '@/routes/admin-protection';
+import emailRoutes from '@/routes/email.routes';
 import { productController } from '@/controllers/products';
 
 const app = express();
@@ -28,7 +29,7 @@ app.use(helmet({
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.FRONTEND_URL || 'http://localhost:5176',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -64,6 +65,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/homepage', homepageRoutes);
 app.use('/api/admin-protection', adminProtectionRoutes);
+app.use('/api/email', emailRoutes);
 
 // Bundles endpoint (filter products by isBundle=true)
 app.get('/api/bundles', (req, res, next) => {

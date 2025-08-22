@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import prisma from '@/config/database';
 import { AppError } from '@/middleware/errorHandler';
-import { logger } from '@/utils/logger';
+import { logger } from '@/utils/logger.simple';
 
 export interface PasswordResetToken {
   id: string;
@@ -49,9 +49,14 @@ class EmailService {
       }
     });
 
-    // TODO: Send actual email here
-    // For now, we'll log the token (remove in production)
-    logger.info(`Password reset token for ${email}: ${resetToken}`);
+    // Send password reset email
+    try {
+      await this.sendPasswordResetEmail(email, resetToken, user.firstName || undefined);
+      logger.info(`Password reset email sent to ${email}`);
+    } catch (emailError) {
+      logger.error(`Failed to send password reset email to ${email}:`, emailError);
+      // Continue execution - token is still valid even if email fails
+    }
     
     return resetToken;
   }
@@ -118,30 +123,11 @@ class EmailService {
   }
 
   /**
-   * Send password reset email (placeholder for future implementation)
+   * Send password reset email using the email service
    */
-  private async sendPasswordResetEmail(email: string, resetToken: string): Promise<void> {
-    // TODO: Implement actual email sending with nodemailer or similar
-    // This should include:
-    // 1. Create HTML email template
-    // 2. Include reset link with token
-    // 3. Send via SMTP service (Gmail, SendGrid, etc.)
-    
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    
-    logger.info(`Would send password reset email to ${email} with URL: ${resetUrl}`);
-    
-    // Placeholder for email sending
-    // await this.mailer.sendMail({
-    //   to: email,
-    //   subject: 'Tilbakestill passord - Helseriet',
-    //   html: `
-    //     <h1>Tilbakestill passord</h1>
-    //     <p>Klikk på lenken under for å tilbakestille passordet ditt:</p>
-    //     <a href="${resetUrl}">Tilbakestill passord</a>
-    //     <p>Denne lenken utløper om 1 time.</p>
-    //   `
-    // });
+  private async sendPasswordResetEmail(email: string, resetToken: string, firstName?: string): Promise<void> {
+    const { emailService: emailServiceConfig } = await import('@/config/email');
+    await emailServiceConfig.sendPasswordResetEmail(email, resetToken, firstName);
   }
 }
 

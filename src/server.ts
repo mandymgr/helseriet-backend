@@ -1,10 +1,14 @@
 import dotenv from 'dotenv';
+// Load environment variables first
+dotenv.config();
+
+// Initialize monitoring before importing anything else
+// import { initializeMonitoring } from '@/config/monitoring.simple';
+// initializeMonitoring(); // Temporarily disabled
+
 import app from './app';
 import { connectDatabase } from '@/config/database';
-import { logger } from '@/utils/logger';
-
-// Load environment variables
-dotenv.config();
+import { logger } from '@/utils/logger.simple';
 
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
