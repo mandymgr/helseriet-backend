@@ -15,13 +15,20 @@ interface BackupData {
 }
 
 export class BackupService {
-  private backupDir = path.join(process.cwd(), 'backups');
+  private readonly backupDir: string = path.join(process.cwd(), 'backups');
 
   constructor() {
     // Ensure backup directory exists
     if (!fs.existsSync(this.backupDir)) {
       fs.mkdirSync(this.backupDir, { recursive: true });
     }
+  }
+
+  async createAutomaticBackup(operation: string): Promise<string> {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = await this.createBackup(`auto_${operation}_${timestamp}`);
+    console.log(`🔒 Automatic backup created before ${operation}: ${path.basename(backupPath)}`);
+    return backupPath;
   }
 
   async createBackup(reason: string = 'manual'): Promise<string> {
@@ -214,11 +221,60 @@ export class BackupService {
     }
   }
 
+  async getLatestBackup(): Promise<string | null> {
+    try {
+      const backups = await this.listBackups();
+      const latestBackup = backups[0];
+      return latestBackup ? path.join(this.backupDir, latestBackup) : null;
+    } catch (error) {
+      console.error('Error getting latest backup:', error);
+      return null;
+    }
+  }
+
+  async restoreLatest(): Promise<void> {
+    const latestBackup = await this.getLatestBackup();
+    if (!latestBackup) {
+      throw new Error('No backups found to restore from');
+    }
+    console.log(`🔄 Restoring from latest backup: ${path.basename(latestBackup)}`);
+    await this.restoreFromBackup(latestBackup);
+  }
+
+  async safeDeleteProducts(where: any, reason: string = 'manual_delete'): Promise<number> {
+    // Create backup before deletion
+    await this.createAutomaticBackup(`delete_products_${reason}`);
+    
+    // Perform deletion
+    const result = await prisma.product.deleteMany({ where });
+    console.log(`✅ Safely deleted ${result.count} products (backup created)`);
+    
+    return result.count;
+  }
+
+  async emergencyRestore(): Promise<void> {
+    console.log('🚨 EMERGENCY RESTORE - Finding latest backup...');
+    const backups = await this.listBackups();
+    
+    if (backups.length === 0) {
+      throw new Error('❌ No backups available for emergency restore!');
+    }
+
+    const latestBackup = backups[0];
+    if (!latestBackup) {
+      throw new Error('❌ No valid backup found for emergency restore!');
+    }
+    console.log(`🔄 Emergency restoring from: ${latestBackup}`);
+    
+    await this.restoreFromBackup(path.join(this.backupDir, latestBackup));
+    console.log('✅ Emergency restore completed!');
+  }
+
   private async cleanupOldBackups(): Promise<void> {
     try {
       const backups = await this.listBackups();
-      if (backups.length > 10) {
-        const toDelete = backups.slice(10);
+      if (backups.length > 15) { // Keep more backups for safety
+        const toDelete = backups.slice(15);
         for (const backup of toDelete) {
           fs.unlinkSync(path.join(this.backupDir, backup));
           console.log(`🗑️  Deleted old backup: ${backup}`);

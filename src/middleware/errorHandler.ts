@@ -37,7 +37,7 @@ export interface ApiError {
 
 export class AppError extends Error {
   public statusCode: number;
-  public code: string;
+  public code: ErrorCodes;
   public errors: ErrorDetail[];
   public severity: ErrorSeverity;
   public isOperational: boolean;
@@ -45,7 +45,7 @@ export class AppError extends Error {
   constructor(
     message: string,
     statusCode: number = 500,
-    code: string = ErrorCodes.INTERNAL_SERVER_ERROR,
+    code: ErrorCodes = ErrorCodes.INTERNAL_SERVER_ERROR,
     errors: ErrorDetail[] = [],
     severity: ErrorSeverity = ErrorSeverity.MEDIUM,
     isOperational: boolean = true
@@ -68,7 +68,7 @@ export const errorHandler = (
   next: NextFunction
 ): void => {
   let statusCode = 500;
-  let code = ErrorCodes.INTERNAL_SERVER_ERROR;
+  let code: ErrorCodes = ErrorCodes.INTERNAL_SERVER_ERROR;
   let message = 'Internal Server Error';
   let errors: ErrorDetail[] = [];
   let severity = ErrorSeverity.HIGH;
@@ -76,7 +76,7 @@ export const errorHandler = (
   // Handle custom AppError
   if (error instanceof AppError) {
     statusCode = error.statusCode;
-    code = error.code as any;
+    code = error.code;
     message = error.message;
     errors = error.errors;
     severity = error.severity;

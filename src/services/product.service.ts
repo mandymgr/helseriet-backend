@@ -1,13 +1,7 @@
 import prisma from '@/config/database';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/config/cloudinary';
-import { AppError } from '@/middleware/errorHandler';
-import { 
-  Product, 
-  ProductImage, 
-  ErrorCodes, 
-  ErrorSeverity,
-  ProductStatus 
-} from '@helseriet/shared-types';
+import { AppError, ErrorCodes, ErrorSeverity } from '@/middleware/errorHandler';
+import { ProductStatus } from '@prisma/client';
 
 interface ProductFilters {
   status?: string;
