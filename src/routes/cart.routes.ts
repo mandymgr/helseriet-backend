@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { cartController } from '@/controllers/cart';
 import { authenticate } from '@/middleware/auth';
+import { apiRateLimiter } from '@/middleware/rateLimiter';
 
 const router = Router();
 
-// All routes require authentication
-router.use(authenticate);
+// All routes require authentication and API rate limiting
+router.use(authenticate, apiRateLimiter);
 
 // GET /api/cart
 router.get('/', cartController.getCart);

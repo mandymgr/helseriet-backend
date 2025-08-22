@@ -2,28 +2,29 @@ import { Router } from 'express';
 import { productController } from '@/controllers/products';
 import { authenticate, authorize } from '@/middleware/auth';
 import uploadMiddleware, { processImages } from '@/middleware/upload';
+import { apiRateLimiter, searchRateLimiter, adminRateLimiter, uploadRateLimiter } from '@/middleware/rateLimiter';
 
 const router = Router();
 
-// Public routes
+// Public routes with appropriate rate limiting
 // GET /api/products
-router.get('/', productController.getProducts);
+router.get('/', apiRateLimiter, productController.getProducts);
 
 // GET /api/products/:id
-router.get('/:id', productController.getProduct);
+router.get('/:id', apiRateLimiter, productController.getProduct);
 
-// GET /api/products/search
-router.get('/search', productController.searchProducts);
+// GET /api/products/search - Apply search rate limiting
+router.get('/search', searchRateLimiter, productController.searchProducts);
 
 // GET /api/bundles - Get bundle products only
-router.get('/bundles', (req, res, next) => {
+router.get('/bundles', apiRateLimiter, (req, res, next) => {
   // Add isBundle filter to query params
   req.query.isBundle = 'true';
   return productController.getProducts(req, res, next);
 });
 
-// Protected routes (Admin only)
-router.use(authenticate, authorize(['ADMIN', 'SUPER_ADMIN']));
+// Protected routes (Admin only) with admin rate limiting
+router.use(authenticate, authorize(['ADMIN', 'SUPER_ADMIN']), adminRateLimiter);
 
 // POST /api/products
 router.post('/', productController.createProduct);
@@ -34,8 +35,9 @@ router.put('/:id', productController.updateProduct);
 // DELETE /api/products/:id
 router.delete('/:id', productController.deleteProduct);
 
-// POST /api/products/:id/images - Last opp produktbilder
+// POST /api/products/:id/images - Last opp produktbilder with upload rate limiting
 router.post('/:id/images', 
+  uploadRateLimiter,
   uploadMiddleware.array('images', 10), 
   processImages, 
   productController.uploadProductImages

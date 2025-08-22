@@ -3,11 +3,12 @@ import { emailService } from '@/config/email';
 import { authenticate } from '@/middleware/auth';
 import { AppError } from '@/middleware/errorHandler';
 import { Request, Response, NextFunction } from 'express';
+import { adminRateLimiter } from '@/middleware/rateLimiter';
 
 const router = Router();
 
-// Test email connection (admin only)
-router.get('/test-connection', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+// Test email connection (admin only) with admin rate limiting
+router.get('/test-connection', adminRateLimiter, authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = (req as any).user;
     
@@ -30,8 +31,8 @@ router.get('/test-connection', authenticate, async (req: Request, res: Response,
   }
 });
 
-// Send test email (admin only)
-router.post('/send-test', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+// Send test email (admin only) with admin rate limiting
+router.post('/send-test', adminRateLimiter, authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = (req as any).user;
     const { email } = req.body;

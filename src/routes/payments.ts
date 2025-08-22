@@ -3,30 +3,31 @@ import { authenticate } from '@/middleware/auth';
 import { paymentController } from '@/controllers/payments';
 import { vippsController } from '@/controllers/payments/vipps.controller';
 import { klarnaController } from '@/controllers/payments/klarna.controller';
+import { paymentRateLimiter, apiRateLimiter } from '@/middleware/rateLimiter';
 
 const router = Router();
 
-// Protected routes - require authentication
-router.post('/create-intent', authenticate, paymentController.createPaymentIntent);
-router.get('/:paymentId/status', authenticate, paymentController.getPaymentStatus);
-router.post('/:paymentId/confirm', authenticate, paymentController.confirmPayment);
+// Protected routes - require authentication and payment rate limiting
+router.post('/create-intent', paymentRateLimiter, authenticate, paymentController.createPaymentIntent);
+router.get('/:paymentId/status', apiRateLimiter, authenticate, paymentController.getPaymentStatus);
+router.post('/:paymentId/confirm', paymentRateLimiter, authenticate, paymentController.confirmPayment);
 
-// Webhook routes - no authentication required (verified by signature)
-router.post('/webhooks/stripe', paymentController.handleStripeWebhook);
-router.post('/webhooks/vipps', vippsController.handleWebhook);
-router.post('/webhooks/klarna', klarnaController.handleWebhook);
+// Webhook routes - no authentication required (verified by signature) but rate limited
+router.post('/webhooks/stripe', apiRateLimiter, paymentController.handleStripeWebhook);
+router.post('/webhooks/vipps', apiRateLimiter, vippsController.handleWebhook);
+router.post('/webhooks/klarna', apiRateLimiter, klarnaController.handleWebhook);
 
-// Vipps specific routes
-router.get('/vipps/:orderId/status', authenticate, vippsController.getPaymentStatus);
-router.post('/vipps/:orderId/capture', authenticate, vippsController.capturePayment);
-router.post('/vipps/:orderId/cancel', authenticate, vippsController.cancelPayment);
+// Vipps specific routes - apply rate limiting
+router.get('/vipps/:orderId/status', apiRateLimiter, authenticate, vippsController.getPaymentStatus);
+router.post('/vipps/:orderId/capture', paymentRateLimiter, authenticate, vippsController.capturePayment);
+router.post('/vipps/:orderId/cancel', paymentRateLimiter, authenticate, vippsController.cancelPayment);
 
-// Klarna specific routes
-router.get('/klarna/checkout/:orderId', authenticate, klarnaController.getCheckoutOrder);
-router.post('/klarna/checkout/:orderId', authenticate, klarnaController.updateCheckoutOrder);
-router.get('/klarna/:orderId/details', authenticate, klarnaController.getOrderDetails);
-router.post('/klarna/:orderId/capture', authenticate, klarnaController.captureOrder);
-router.post('/klarna/:orderId/cancel', authenticate, klarnaController.cancelOrder);
-router.post('/klarna/:orderId/refund', authenticate, klarnaController.createRefund);
+// Klarna specific routes - apply rate limiting
+router.get('/klarna/checkout/:orderId', apiRateLimiter, authenticate, klarnaController.getCheckoutOrder);
+router.post('/klarna/checkout/:orderId', paymentRateLimiter, authenticate, klarnaController.updateCheckoutOrder);
+router.get('/klarna/:orderId/details', apiRateLimiter, authenticate, klarnaController.getOrderDetails);
+router.post('/klarna/:orderId/capture', paymentRateLimiter, authenticate, klarnaController.captureOrder);
+router.post('/klarna/:orderId/cancel', paymentRateLimiter, authenticate, klarnaController.cancelOrder);
+router.post('/klarna/:orderId/refund', paymentRateLimiter, authenticate, klarnaController.createRefund);
 
 export default router;

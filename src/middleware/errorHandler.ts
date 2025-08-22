@@ -1,6 +1,39 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '@/utils/logger.simple';
-import { ApiError, ErrorCodes, ErrorDetail, ErrorSeverity } from '@helseriet/shared-types';
+
+export enum ErrorCodes {
+  INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  NOT_FOUND = 'NOT_FOUND',
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
+  CONFLICT = 'CONFLICT',
+  DATABASE_ERROR = 'DATABASE_ERROR',
+  AUTHENTICATION_FAILED = 'AUTHENTICATION_FAILED',
+  INVALID_TOKEN = 'INVALID_TOKEN'
+}
+
+export enum ErrorSeverity {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL'
+}
+
+export interface ErrorDetail {
+  message: string;
+  field?: string;
+  code?: string;
+}
+
+export interface ApiError {
+  success: false;
+  message: string;
+  code: ErrorCodes;
+  errors?: ErrorDetail[];
+  timestamp: string;
+  path: string;
+}
 
 export class AppError extends Error {
   public statusCode: number;
