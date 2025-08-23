@@ -45,7 +45,6 @@ function findImageFile(productDir, imageType) {
         }
       }
     } catch (e) {
-      // Directory doesn't exist
       return null;
     }
   }
@@ -60,22 +59,19 @@ function cleanProductName(name) {
     .trim();
 }
 
-// Function to create slug from product name (for Cloudinary folder)
-function createSlug(name) {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\\s-]/g, '')
-    .replace(/\\s+/g, '-')
-    .replace(/-+/g, '-')
-    .trim();
+// Extract Cloudinary folder from database URL
+function extractCloudinaryFolder(url) {
+  const match = url.match(/helseriet\/synergy\/([^/]+)\//);
+  return match ? match[1] : null;
 }
 
-async function uploadImageToCloudinary(filePath, productSlug, imageType, sortOrder) {
+async function uploadImageToCloudinary(filePath, cloudinaryFolder, imageType, sortOrder) {
   try {
     console.log(`    📤 Uploading ${imageType}: ${path.basename(filePath)}`);
+    console.log(`    🎯 Target folder: helseriet/synergy/${cloudinaryFolder}`);
     
     const result = await cloudinary.uploader.upload(filePath, {
-      folder: `helseriet/synergy/synergy-${productSlug}`,
+      folder: `helseriet/synergy/${cloudinaryFolder}`,
       public_id: `image_${sortOrder + 1}`,
       resource_type: 'image',
       overwrite: true,
@@ -95,11 +91,23 @@ async function uploadImageToCloudinary(filePath, productSlug, imageType, sortOrd
 
 async function processProduct(product) {
   const cleanName = cleanProductName(product.name);
-  const productSlug = createSlug(cleanName);
+  
+  // Get the actual Cloudinary folder from first image URL
+  const firstImage = product.images?.[0];
+  if (!firstImage) {
+    console.log(`   ⚠️  No images found for ${product.name}`);
+    return 0;
+  }
+  
+  const cloudinaryFolder = extractCloudinaryFolder(firstImage.url);
+  if (!cloudinaryFolder) {
+    console.log(`   ⚠️  Could not extract Cloudinary folder from URL: ${firstImage.url}`);
+    return 0;
+  }
   
   console.log(`\\n🔄 Processing: ${product.name}`);
   console.log(`   📁 Looking for: ${cleanName}`);
-  console.log(`   ☁️  Cloudinary target: helseriet/synergy/synergy-${productSlug}`);
+  console.log(`   ☁️  Database folder: ${cloudinaryFolder}`);
   
   // Find product directory in the Synergy kit
   const productDir = path.join(synergyKitPath, cleanName);
@@ -128,8 +136,8 @@ async function processProduct(product) {
     
     console.log(`    🔍 Found ${imageType}: ${path.basename(imageFile)}`);
     
-    // Upload to Cloudinary
-    const cloudinaryUrl = await uploadImageToCloudinary(imageFile, productSlug, imageType, sortOrder);
+    // Upload to Cloudinary using EXACT folder from database
+    const cloudinaryUrl = await uploadImageToCloudinary(imageFile, cloudinaryFolder, imageType, sortOrder);
     
     if (cloudinaryUrl) {
       uploadedCount++;
@@ -144,23 +152,30 @@ async function processProduct(product) {
   return uploadedCount;
 }
 
-async function reUploadAllSynergyImages() {
+async function fixAllCloudinaryFolders() {
   try {
-    console.log('🚀 Starting complete re-upload of ALL SYNERGY images from correct source...\\n');
+    console.log('🚀 Starting Cloudinary folder-matched upload...\\n');
     console.log('📁 Source: /Users/mandymarigjervikrygg/Desktop/Helseriet mapper/alle filer helseriet/Synergy kit');
-    console.log('⚠️  This will overwrite ALL existing Cloudinary images with fresh uploads in correct order!');
-    console.log('🚫 Bundles will be SKIPPED to preserve correct bundle images.\\n');
+    console.log('🎯 Strategy: Match EXACT Cloudinary folders from database URLs');
+    console.log('⚠️  This will overwrite existing images using correct folder paths!\\n');
     
-    // Get all SYNERGY products that are NOT bundles
+    // Get all SYNERGY products that are NOT bundles, with their images
     const products = await prisma.product.findMany({
       where: {
         name: { startsWith: 'SYNERGY' },
-        isBundle: false  // SKIP BUNDLES!
+        isBundle: false
+      },
+      include: {
+        images: {
+          select: { url: true },
+          orderBy: { sortOrder: 'asc' },
+          take: 1  // Just need first image to extract folder
+        }
       },
       orderBy: { name: 'asc' }
     });
     
-    console.log(`📦 Found ${products.length} individual SYNERGY products to process (bundles excluded)\\n`);
+    console.log(`📦 Found ${products.length} individual SYNERGY products in database\\n`);
     
     let totalUploaded = 0;
     let processedCount = 0;
@@ -177,42 +192,35 @@ async function reUploadAllSynergyImages() {
         successCount++;
       }
       
-      // Longer delay between products to be nice to Cloudinary
+      // Longer delay between products
       if (processedCount < products.length) {
         console.log(`   ⏱️  Waiting 2 seconds before next product...`);
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
     
-    console.log(`\\n🎉 Complete re-upload finished!`);
+    console.log(`\\n🎉 Folder-matched upload complete!`);
     console.log(`📊 Total images uploaded: ${totalUploaded}`);
     console.log(`📦 Products successfully processed: ${successCount}/${products.length}`);
-    console.log(`📦 Products with issues: ${products.length - successCount}`);
-    console.log(`\\n✅ All SYNERGY products should now have correct image order in Cloudinary:`);
-    console.log(`   • image_1 = FRONT (PDP files) - Product front panel`);
-    console.log(`   • image_2 = SIDE (LP files) - Left panel/side view`);
-    console.log(`   • image_3 = BACK (RP files) - Right panel/back view`);
-    console.log(`   • image_4 = INGREDIENTS (Facts files) - Ingredients/facts panel`);
-    console.log(`\\n🔄 Hard refresh your browser (Cmd+Shift+R) to see the updated images!`);
-    console.log(`🚫 Bundle images were preserved and not touched.`);
+    console.log(`\\n✅ All images uploaded to EXACT Cloudinary folders that database URLs point to!`);
+    console.log(`🔄 Hard refresh your browser (Cmd+Shift+R) to see the updated images!`);
     
   } catch (error) {
-    console.error('❌ Error during re-upload process:', error);
+    console.error('❌ Error during upload process:', error);
   } finally {
     await prisma.$disconnect();
   }
 }
 
 // Confirmation and start
-console.log('🚨 COMPLETE SYNERGY IMAGE RE-UPLOAD');
-console.log('=====================================');
-console.log('This will re-upload ALL SYNERGY product images from the correct source folder.');
-console.log('• Source: Helseriet mapper/alle filer helseriet/Synergy kit');
-console.log('• Target: All individual SYNERGY products (NOT bundles)');
+console.log('🎯 CLOUDINARY FOLDER-MATCHED UPLOAD');
+console.log('===================================');
+console.log('This will upload images to the EXACT Cloudinary folders that database URLs point to.');
+console.log('• Reads folder paths directly from existing database image URLs');
+console.log('• Ensures 100% path matching between database and Cloudinary');
 console.log('• Expected duration: 10-15 minutes');
-console.log('• Will overwrite existing Cloudinary images');
 console.log('\\nStarting in 5 seconds... Press Ctrl+C to cancel.');
 
 setTimeout(() => {
-  reUploadAllSynergyImages();
+  fixAllCloudinaryFolders();
 }, 5000);
