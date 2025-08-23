@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { uploadToCloudinary, deleteFromCloudinary } from '@/config/cloudinary';
-import prisma from '@/config/database';
-import { AppError } from '@/middleware/errorHandler';
 import { AuthenticatedRequest } from '@/middleware/auth';
+import { productService } from '@/services/product.service';
 
 class ProductController {
   async getProducts(req: Request, res: Response, next: NextFunction) {
@@ -19,91 +17,32 @@ class ProductController {
         featured
       } = req.query;
 
-      const skip = (Number(page) - 1) * Number(limit);
-
-      // Build filter conditions
-      const where: any = {
-        isActive: true
+      const filters: any = {
+        status: status as string,
+        category: category as string,
+        search: search as string
       };
 
-      if (status && status !== 'all') {
-        where.status = status;
+      if (isBundle) {
+        filters.isBundle = isBundle === 'true';
       }
 
-      if (category) {
-        where.categoryId = category;
+      if (featured) {
+        filters.featured = featured === 'true';
       }
 
-      if (search) {
-        where.OR = [
-          { name: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
-          { sku: { contains: search, mode: 'insensitive' } }
-        ];
-      }
+      const pagination = {
+        page: Number(page),
+        limit: Number(limit),
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as 'asc' | 'desc'
+      };
 
-      if (isBundle !== undefined) {
-        where.isBundle = isBundle === 'true';
-      }
-
-      if (featured !== undefined) {
-        where.isFeatured = featured === 'true';
-      }
-
-      // Get products with category and images
-      const [products, totalCount] = await Promise.all([
-        prisma.product.findMany({
-          where,
-          skip,
-          take: Number(limit),
-          orderBy: {
-            [sortBy as string]: sortOrder
-          },
-          include: {
-            category: {
-              select: { id: true, name: true, slug: true }
-            },
-            images: {
-              select: { id: true, url: true, altText: true, sortOrder: true, imageType: true, isPrimary: true },
-              where: { imageType: 'FRONT' },
-              orderBy: { isPrimary: 'desc' },
-              take: 1
-            },
-            _count: {
-              select: { reviews: true }
-            }
-          }
-        }),
-        prisma.product.count({ where })
-      ]);
-
-      // Calculate average ratings
-      const productsWithRatings = await Promise.all(
-        products.map(async (product) => {
-          const avgRating = await prisma.review.aggregate({
-            where: { productId: product.id },
-            _avg: { rating: true }
-          });
-
-          return {
-            ...product,
-            avgRating: avgRating._avg.rating ? Number(avgRating._avg.rating.toFixed(1)) : null,
-            reviewCount: product._count.reviews
-          };
-        })
-      );
+      const result = await productService.getProducts(filters, pagination);
 
       res.status(200).json({
         success: true,
-        data: {
-          products: productsWithRatings,
-          pagination: {
-            page: Number(page),
-            limit: Number(limit),
-            total: totalCount,
-            pages: Math.ceil(totalCount / Number(limit))
-          }
-        }
+        data: result
       });
     } catch (error) {
       next(error);
@@ -113,96 +52,16 @@ class ProductController {
   async getProduct(req: Request, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
-
+      
       if (!id) {
-        throw new AppError('Produkt ID er påkrevd', 400);
+        throw new Error('Product ID is required');
       }
-
-      const product = await prisma.product.findUnique({
-        where: { 
-          id,
-          isActive: true,
-          status: 'ACTIVE'
-        },
-        include: {
-          category: {
-            select: { id: true, name: true, slug: true }
-          },
-          images: {
-            select: { 
-              id: true, 
-              url: true, 
-              altText: true, 
-              sortOrder: true,
-              imageType: true,
-              isPrimary: true
-            },
-            orderBy: [
-              { isPrimary: 'desc' },
-              { imageType: 'asc' },
-              { sortOrder: 'asc' }
-            ]
-          },
-          reviews: {
-            select: {
-              id: true,
-              rating: true,
-              title: true,
-              comment: true,
-              createdAt: true,
-              user: {
-                select: {
-                  firstName: true,
-                  lastName: true
-                }
-              }
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 10
-          },
-          _count: {
-            select: { reviews: true }
-          },
-          bundleItems: {
-            select: {
-              id: true,
-              quantity: true,
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  price: true,
-                  images: {
-                    select: { url: true, altText: true },
-                    where: { imageType: 'FRONT' },
-                    take: 1
-                  }
-                }
-              }
-            }
-          }
-        }
-      });
-
-      if (!product) {
-        throw new AppError('Produkt ikke funnet', 404);
-      }
-
-      // Calculate average rating
-      const avgRating = await prisma.review.aggregate({
-        where: { productId: product.id },
-        _avg: { rating: true }
-      });
-
-      const productWithRating = {
-        ...product,
-        averageRating: avgRating._avg.rating ? Number(avgRating._avg.rating.toFixed(1)) : 0,
-        totalReviews: product._count.reviews
-      };
+      
+      const product = await productService.getProductById(id);
 
       res.status(200).json({
         success: true,
-        data: productWithRating
+        data: product
       });
     } catch (error) {
       next(error);
@@ -211,9 +70,19 @@ class ProductController {
 
   async searchProducts(req: Request, res: Response, next: NextFunction) {
     try {
+      const { q: query, page = 1, limit = 10 } = req.query;
+      
+      const filters = {};
+      const pagination = {
+        page: Number(page),
+        limit: Number(limit)
+      };
+
+      const result = await productService.searchProducts(query as string, filters, pagination);
+
       res.status(200).json({
         success: true,
-        message: 'Search products endpoint - to be implemented'
+        data: result
       });
     } catch (error) {
       next(error);
@@ -222,93 +91,8 @@ class ProductController {
 
   async createProduct(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const {
-        name,
-        description,
-        shortDescription,
-        sku,
-        price,
-        comparePrice,
-        costPrice,
-        categoryId,
-        quantity = 0,
-        weight,
-        dimensions,
-        tags = [],
-        metaTitle,
-        metaDescription,
-        trackQuantity = true,
-        lowStockThreshold
-      } = req.body;
-
-      // Validate required fields
-      if (!name || !sku || !price || !categoryId) {
-        throw new AppError('Name, SKU, price, and category are required', 400);
-      }
-
-      // Check if SKU already exists
-      const existingSku = await prisma.product.findUnique({
-        where: { sku }
-      });
-
-      if (existingSku) {
-        throw new AppError('SKU already exists', 400);
-      }
-
-      // Generate slug from name
-      const slug = name
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .trim();
-
-      // Check if slug exists and make it unique
-      let finalSlug = slug;
-      let counter = 1;
-      while (await prisma.product.findUnique({ where: { slug: finalSlug } })) {
-        finalSlug = `${slug}-${counter}`;
-        counter++;
-      }
-
-      // Verify category exists
-      const category = await prisma.category.findUnique({
-        where: { id: categoryId }
-      });
-
-      if (!category) {
-        throw new AppError('Category not found', 400);
-      }
-
-      // Create product
-      const product = await prisma.product.create({
-        data: {
-          name,
-          slug: finalSlug,
-          description,
-          shortDescription,
-          sku,
-          price: Number(price),
-          comparePrice: comparePrice ? Number(comparePrice) : null,
-          costPrice: costPrice ? Number(costPrice) : null,
-          categoryId,
-          quantity: Number(quantity),
-          weight: weight ? Number(weight) : null,
-          dimensions,
-          tags,
-          metaTitle,
-          metaDescription,
-          trackQuantity,
-          lowStockThreshold: lowStockThreshold ? Number(lowStockThreshold) : null,
-          status: 'DRAFT' // New products start as draft
-        },
-        include: {
-          category: {
-            select: { id: true, name: true, slug: true }
-          },
-          images: true
-        }
-      });
+      const productData = req.body;
+      const product = await productService.createProduct(productData);
 
       res.status(201).json({
         success: true,
@@ -322,9 +106,19 @@ class ProductController {
 
   async updateProduct(req: Request, res: Response, next: NextFunction) {
     try {
+      const { id } = req.params;
+      
+      if (!id) {
+        throw new Error('Product ID is required');
+      }
+      
+      const updateData = req.body;
+      const product = await productService.updateProduct(id, updateData);
+
       res.status(200).json({
         success: true,
-        message: 'Update product endpoint - to be implemented'
+        message: 'Product updated successfully',
+        data: { product }
       });
     } catch (error) {
       next(error);
@@ -333,9 +127,17 @@ class ProductController {
 
   async deleteProduct(req: Request, res: Response, next: NextFunction) {
     try {
+      const { id } = req.params;
+      
+      if (!id) {
+        throw new Error('Product ID is required');
+      }
+      
+      await productService.deleteProduct(id);
+
       res.status(200).json({
         success: true,
-        message: 'Delete product endpoint - to be implemented'
+        message: 'Product deleted successfully'
       });
     } catch (error) {
       next(error);
@@ -347,46 +149,14 @@ class ProductController {
       const { id: productId } = req.params;
       
       if (!productId) {
-        throw new AppError('Product ID is required', 400);
+        throw new Error('Product ID is required');
       }
       
       if (!req.processedImages || req.processedImages.length === 0) {
-        throw new AppError('No images provided', 400);
+        throw new Error('No images provided');
       }
 
-      // Sjekk om produktet eksisterer
-      const product = await prisma.product.findUnique({
-        where: { id: productId }
-      });
-
-      if (!product) {
-        throw new AppError('Product not found', 404);
-      }
-
-      const uploadPromises = req.processedImages.map(async (imageBuffer, index) => {
-        const uploadResult = await uploadToCloudinary(imageBuffer, {
-          folder: `helseriet/products/${productId}`,
-          transformation: [
-            { width: 1200, height: 1200, crop: 'limit' },
-            { quality: 'auto' },
-            { format: 'auto' }
-          ]
-        });
-
-        // Lagre bildeinformasjon i databasen
-        return prisma.productImage.create({
-          data: {
-            productId,
-            url: uploadResult.secure_url,
-            altText: `${product.name} - bilde ${index + 1}`,
-            sortOrder: index,
-            imageType: index === 0 ? 'FRONT' : 'GENERAL', // First image is assumed to be front
-            isPrimary: index === 0
-          }
-        });
-      });
-
-      const savedImages = await Promise.all(uploadPromises);
+      const savedImages = await productService.uploadProductImages(productId, req.processedImages);
 
       res.status(201).json({
         success: true,
@@ -403,37 +173,12 @@ class ProductController {
   async deleteProductImage(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const { productId, imageId } = req.params;
-
+      
       if (!productId || !imageId) {
-        throw new AppError('Product ID and Image ID are required', 400);
+        throw new Error('Product ID and Image ID are required');
       }
-
-      // Finn bildet i databasen
-      const image = await prisma.productImage.findFirst({
-        where: {
-          id: imageId,
-          productId: productId
-        }
-      });
-
-      if (!image) {
-        throw new AppError('Image not found', 404);
-      }
-
-      // Ekstraherer public_id fra Cloudinary URL
-      const urlParts = image.url.split('/');
-      const publicIdWithExtension = urlParts.slice(-2).join('/'); // folder/filename.ext
-      const publicId = publicIdWithExtension.split('.')[0]; // fjern filextension
-
-      // Slett fra Cloudinary
-      if (publicId) {
-        await deleteFromCloudinary(publicId);
-      }
-
-      // Slett fra database
-      await prisma.productImage.delete({
-        where: { id: imageId }
-      });
+      
+      await productService.deleteProductImage(productId, imageId);
 
       res.status(200).json({
         success: true,

@@ -1,7 +1,6 @@
-import prisma from '@/config/database';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/config/cloudinary';
-import { AppError, ErrorCodes, ErrorSeverity } from '@/middleware/errorHandler';
 import { ProductStatus } from '@prisma/client';
+import { BaseService } from './base.service';
 
 interface ProductFilters {
   status?: string;
@@ -37,8 +36,12 @@ interface CreateProductData {
   lowStockThreshold?: number;
 }
 
-class ProductService {
-  // Get products with filtering and pagination
+interface UpdateProductData extends Partial<CreateProductData> {}
+
+class ProductService extends BaseService {
+  /**
+   * Get products with filtering and pagination
+   */
   async getProducts(filters: ProductFilters = {}, pagination: PaginationOptions = {}) {
     const { 
       page = 1, 
@@ -78,10 +81,10 @@ class ProductService {
       where.isFeatured = filters.featured;
     }
 
-    try {
+    return this.handleDatabaseOperation(async () => {
       // Get products with category and images
       const [products, totalCount] = await Promise.all([
-        prisma.product.findMany({
+        this.db.product.findMany({
           where,
           skip,
           take: Number(limit),
@@ -103,7 +106,7 @@ class ProductService {
             }
           }
         }),
-        prisma.product.count({ where })
+        this.db.product.count({ where })
       ]);
 
       // Calculate average ratings
@@ -118,105 +121,84 @@ class ProductService {
           pages: Math.ceil(totalCount / Number(limit))
         }
       };
-    } catch (error: any) {
-      throw new AppError(
-        'Feil ved henting av produkter', 
-        500, 
-        ErrorCodes.DATABASE_ERROR,
-        [{ message: error.message }],
-        ErrorSeverity.HIGH
-      );
-    }
+    }, 'Failed to fetch products');
   }
 
-  // Get single product by ID
+  /**
+   * Get single product by ID
+   */
   async getProductById(id: string) {
-    if (!id) {
-      throw new AppError(
-        'Produkt ID er påkrevd', 
-        400, 
-        ErrorCodes.VALIDATION_ERROR,
-        [{ message: 'Product ID is required' }],
-        ErrorSeverity.LOW
-      );
-    }
+    this.validateId(id, 'Product');
 
-    try {
-      const product = await prisma.product.findUnique({
-        where: { 
-          id,
-          isActive: true,
-          status: 'ACTIVE'
-        },
-        include: {
-          category: {
-            select: { id: true, name: true, slug: true }
+    return this.handleDatabaseOperation(async () => {
+      const product = await this.ensureExists(
+        () => this.db.product.findUnique({
+          where: { 
+            id,
+            isActive: true,
+            status: 'ACTIVE'
           },
-          images: {
-            select: { 
-              id: true, 
-              url: true, 
-              altText: true, 
-              sortOrder: true,
-              imageType: true,
-              isPrimary: true
+          include: {
+            category: {
+              select: { id: true, name: true, slug: true }
             },
-            orderBy: [
-              { isPrimary: 'desc' },
-              { imageType: 'asc' },
-              { sortOrder: 'asc' }
-            ]
-          },
-          reviews: {
-            select: {
-              id: true,
-              rating: true,
-              title: true,
-              comment: true,
-              createdAt: true,
-              user: {
-                select: {
-                  firstName: true,
-                  lastName: true
+            images: {
+              select: { 
+                id: true, 
+                url: true, 
+                altText: true, 
+                sortOrder: true,
+                imageType: true,
+                isPrimary: true
+              },
+              orderBy: [
+                { isPrimary: 'desc' },
+                { imageType: 'asc' },
+                { sortOrder: 'asc' }
+              ]
+            },
+            reviews: {
+              select: {
+                id: true,
+                rating: true,
+                title: true,
+                comment: true,
+                createdAt: true,
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true
+                  }
                 }
-              }
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 10
             },
-            orderBy: { createdAt: 'desc' },
-            take: 10
-          },
-          _count: {
-            select: { reviews: true }
-          },
-          bundleItems: {
-            select: {
-              id: true,
-              quantity: true,
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  price: true,
-                  images: {
-                    select: { url: true, altText: true },
-                    where: { imageType: 'FRONT' },
-                    take: 1
+            _count: {
+              select: { reviews: true }
+            },
+            bundleItems: {
+              select: {
+                id: true,
+                quantity: true,
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    price: true,
+                    images: {
+                      select: { url: true, altText: true },
+                      where: { imageType: 'FRONT' },
+                      take: 1
+                    }
                   }
                 }
               }
             }
           }
-        }
-      });
-
-      if (!product) {
-        throw new AppError(
-          'Produkt ikke funnet', 
-          404, 
-          ErrorCodes.NOT_FOUND,
-          [{ message: 'Product not found' }],
-          ErrorSeverity.LOW
-        );
-      }
+        }),
+        'Product'
+      );
 
       // Calculate average rating
       const avgRating = await this.calculateAverageRating(product.id);
@@ -226,135 +208,80 @@ class ProductService {
         averageRating: avgRating,
         totalReviews: product._count.reviews
       };
-    } catch (error: any) {
-      if (error instanceof AppError) {
-        throw error;
-      }
-      throw new AppError(
-        'Feil ved henting av produkt', 
-        500, 
-        ErrorCodes.DATABASE_ERROR,
-        [{ message: error.message }],
-        ErrorSeverity.HIGH
-      );
-    }
+    }, 'Failed to get product');
   }
 
-  // Get product by slug
+  /**
+   * Get product by slug
+   */
   async getProductBySlug(slug: string) {
     if (!slug) {
-      throw new AppError(
-        'Produkt slug er påkrevd', 
-        400, 
-        ErrorCodes.VALIDATION_ERROR,
-        [{ message: 'Product slug is required' }],
-        ErrorSeverity.LOW
-      );
+      throw this.createValidationError('Product slug is required');
     }
 
-    try {
-      const product = await prisma.product.findUnique({
-        where: { 
-          slug,
-          isActive: true,
-          status: 'ACTIVE'
-        },
-        include: {
-          category: {
-            select: { id: true, name: true, slug: true }
+    return this.handleDatabaseOperation(async () => {
+      const product = await this.ensureExists(
+        () => this.db.product.findUnique({
+          where: { 
+            slug,
+            isActive: true,
+            status: 'ACTIVE'
           },
-          images: {
-            select: { 
-              id: true, 
-              url: true, 
-              altText: true, 
-              sortOrder: true,
-              imageType: true,
-              isPrimary: true
+          include: {
+            category: {
+              select: { id: true, name: true, slug: true }
             },
-            orderBy: [
-              { isPrimary: 'desc' },
-              { imageType: 'asc' },
-              { sortOrder: 'asc' }
-            ]
+            images: {
+              select: { 
+                id: true, 
+                url: true, 
+                altText: true, 
+                sortOrder: true,
+                imageType: true,
+                isPrimary: true
+              },
+              orderBy: [
+                { isPrimary: 'desc' },
+                { imageType: 'asc' },
+                { sortOrder: 'asc' }
+              ]
+            }
           }
-        }
-      });
-
-      if (!product) {
-        throw new AppError(
-          'Produkt ikke funnet', 
-          404, 
-          ErrorCodes.NOT_FOUND,
-          [{ message: 'Product not found' }],
-          ErrorSeverity.LOW
-        );
-      }
+        }),
+        'Product'
+      );
 
       return product;
-    } catch (error: any) {
-      if (error instanceof AppError) {
-        throw error;
-      }
-      throw new AppError(
-        'Feil ved henting av produkt', 
-        500, 
-        ErrorCodes.DATABASE_ERROR,
-        [{ message: error.message }],
-        ErrorSeverity.HIGH
-      );
-    }
+    }, 'Failed to get product by slug');
   }
 
-  // Create new product
+  /**
+   * Create new product
+   */
   async createProduct(productData: CreateProductData) {
-    // Validate required fields
-    if (!productData.name || !productData.sku || !productData.price || !productData.categoryId) {
-      throw new AppError(
-        'Name, SKU, price, and category are required', 
-        400, 
-        ErrorCodes.VALIDATION_ERROR,
-        [{ message: 'Required fields missing' }],
-        ErrorSeverity.LOW
-      );
-    }
+    this.validateRequiredFields(productData, ['name', 'sku', 'price', 'categoryId']);
 
-    try {
+    return this.handleDatabaseOperation(async () => {
       // Check if SKU already exists
-      const existingSku = await prisma.product.findUnique({
+      const existingSku = await this.db.product.findUnique({
         where: { sku: productData.sku }
       });
 
       if (existingSku) {
-        throw new AppError(
-          'SKU already exists', 
-          400, 
-          ErrorCodes.CONFLICT,
-          [{ message: 'A product with this SKU already exists' }],
-          ErrorSeverity.LOW
-        );
+        throw this.createConflictError('A product with this SKU already exists', 'sku');
       }
 
       // Generate unique slug
       const slug = await this.generateUniqueSlug(productData.name);
 
       // Verify category exists
-      const category = await prisma.category.findUnique({
-        where: { id: productData.categoryId }
-      });
-
-      if (!category) {
-        throw new AppError(
-          'Category not found', 
-          400, 
-          ErrorCodes.NOT_FOUND,
-          [{ message: 'The specified category does not exist' }],
-          ErrorSeverity.LOW
-        );
-      }
+      await this.ensureExists(
+        () => this.db.category.findUnique({ where: { id: productData.categoryId } }),
+        'Category'
+      );
 
       // Create product
-      const product = await prisma.product.create({
+      const product = await this.db.product.create({
         data: {
           name: productData.name,
           slug,
@@ -371,7 +298,7 @@ class ProductService {
           tags: productData.tags || [],
           metaTitle: productData.metaTitle || null,
           metaDescription: productData.metaDescription || null,
-          trackQuantity: productData.trackQuantity !== undefined ? productData.trackQuantity : true,
+          trackQuantity: productData.trackQuantity ?? true,
           lowStockThreshold: productData.lowStockThreshold ? Number(productData.lowStockThreshold) : null,
           status: ProductStatus.DRAFT // New products start as draft
         },
@@ -384,57 +311,130 @@ class ProductService {
       });
 
       return product;
-    } catch (error: any) {
-      if (error instanceof AppError) {
-        throw error;
-      }
-      throw new AppError(
-        'Feil ved opprettelse av produkt', 
-        500, 
-        ErrorCodes.DATABASE_ERROR,
-        [{ message: error.message }],
-        ErrorSeverity.HIGH
-      );
-    }
+    }, 'Failed to create product');
   }
 
-  // Upload product images
-  async uploadProductImages(productId: string, imageBuffers: Buffer[]) {
-    if (!productId) {
-      throw new AppError(
-        'Product ID is required', 
-        400, 
-        ErrorCodes.VALIDATION_ERROR,
-        [{ message: 'Product ID is required' }],
-        ErrorSeverity.LOW
+  /**
+   * Update product
+   */
+  async updateProduct(id: string, updateData: UpdateProductData) {
+    this.validateId(id, 'Product');
+
+    return this.handleDatabaseOperation(async () => {
+      // Ensure product exists
+      await this.ensureExists(
+        () => this.db.product.findUnique({ where: { id } }),
+        'Product'
       );
-    }
 
-    if (!imageBuffers || imageBuffers.length === 0) {
-      throw new AppError(
-        'No images provided', 
-        400, 
-        ErrorCodes.VALIDATION_ERROR,
-        [{ message: 'At least one image is required' }],
-        ErrorSeverity.LOW
-      );
-    }
+      // If SKU is being updated, check for conflicts
+      if (updateData.sku) {
+        const existingSku = await this.db.product.findFirst({
+          where: { 
+            sku: updateData.sku,
+            NOT: { id }
+          }
+        });
 
-    try {
-      // Check if product exists
-      const product = await prisma.product.findUnique({
-        where: { id: productId }
-      });
+        if (existingSku) {
+          throw this.createConflictError('A product with this SKU already exists', 'sku');
+        }
+      }
 
-      if (!product) {
-        throw new AppError(
-          'Product not found', 
-          404, 
-          ErrorCodes.NOT_FOUND,
-          [{ message: 'Product not found' }],
-          ErrorSeverity.LOW
+      // If name is being updated, generate new slug
+      let slug: string | undefined;
+      if (updateData.name) {
+        slug = await this.generateUniqueSlug(updateData.name, id);
+      }
+
+      // If category is being updated, verify it exists
+      if (updateData.categoryId) {
+        await this.ensureExists(
+          () => this.db.category.findUnique({ where: { id: updateData.categoryId! } }),
+          'Category'
         );
       }
+
+      // Prepare update data
+      const updateFields: any = { ...updateData };
+      
+      if (slug) updateFields.slug = slug;
+      if (updateData.price !== undefined) updateFields.price = Number(updateData.price);
+      if (updateData.comparePrice !== undefined) updateFields.comparePrice = Number(updateData.comparePrice);
+      if (updateData.costPrice !== undefined) updateFields.costPrice = Number(updateData.costPrice);
+      if (updateData.quantity !== undefined) updateFields.quantity = Number(updateData.quantity);
+      if (updateData.weight !== undefined) updateFields.weight = Number(updateData.weight);
+      if (updateData.lowStockThreshold !== undefined) updateFields.lowStockThreshold = Number(updateData.lowStockThreshold);
+
+      // Update product
+      const product = await this.db.product.update({
+        where: { id },
+        data: updateFields,
+        include: {
+          category: {
+            select: { id: true, name: true, slug: true }
+          },
+          images: true
+        }
+      });
+
+      return product;
+    }, 'Failed to update product');
+  }
+
+  /**
+   * Delete product (soft delete)
+   */
+  async deleteProduct(id: string) {
+    this.validateId(id, 'Product');
+
+    return this.handleDatabaseOperation(async () => {
+      // Ensure product exists
+      await this.ensureExists(
+        () => this.db.product.findUnique({ where: { id } }),
+        'Product'
+      );
+
+      // Soft delete by setting isActive to false
+      await this.db.product.update({
+        where: { id },
+        data: { isActive: false }
+      });
+    }, 'Failed to delete product');
+  }
+
+  /**
+   * Search products
+   */
+  async searchProducts(query: string, filters: ProductFilters = {}, pagination: PaginationOptions = {}) {
+    if (!query || query.trim().length < 2) {
+      throw this.createValidationError('Search query must be at least 2 characters long');
+    }
+
+    const searchFilters = {
+      ...filters,
+      search: query.trim()
+    };
+
+    return this.getProducts(searchFilters, pagination);
+  }
+
+  /**
+   * Upload product images
+   */
+  async uploadProductImages(productId: string, imageBuffers: Buffer[]) {
+    this.validateId(productId, 'Product');
+
+    if (!imageBuffers || imageBuffers.length === 0) {
+      throw this.createValidationError('At least one image is required');
+    }
+
+    return this.handleDatabaseOperation(async () => {
+      // Check if product exists
+      const product = await this.ensureExists(
+        () => this.db.product.findUnique({ where: { id: productId } }),
+        'Product'
+      );
 
       const uploadPromises = imageBuffers.map(async (imageBuffer, index) => {
         const uploadResult = await uploadToCloudinary(imageBuffer, {
@@ -447,13 +447,13 @@ class ProductService {
         });
 
         // Save image info to database
-        return prisma.productImage.create({
+        return this.db.productImage.create({
           data: {
             productId,
             url: uploadResult.secure_url,
             altText: `${product.name} - bilde ${index + 1}`,
             sortOrder: index,
-            imageType: index === 0 ? 'FRONT' : 'GENERAL', // First image is assumed to be front
+            imageType: index === 0 ? 'FRONT' : 'GENERAL',
             isPrimary: index === 0
           }
         });
@@ -461,55 +461,29 @@ class ProductService {
 
       const savedImages = await Promise.all(uploadPromises);
       return savedImages;
-    } catch (error: any) {
-      if (error instanceof AppError) {
-        throw error;
-      }
-      throw new AppError(
-        'Feil ved opplasting av bilder', 
-        500, 
-        ErrorCodes.INTERNAL_SERVER_ERROR,
-        [{ message: error.message }],
-        ErrorSeverity.HIGH
-      );
-    }
+    }, 'Failed to upload product images');
   }
 
-  // Delete product image
+  /**
+   * Delete product image
+   */
   async deleteProductImage(productId: string, imageId: string) {
-    if (!productId || !imageId) {
-      throw new AppError(
-        'Product ID and Image ID are required', 
-        400, 
-        ErrorCodes.VALIDATION_ERROR,
-        [{ message: 'Product ID and Image ID are required' }],
-        ErrorSeverity.LOW
-      );
-    }
+    this.validateId(productId, 'Product');
+    this.validateId(imageId, 'Image');
 
-    try {
+    return this.handleDatabaseOperation(async () => {
       // Find the image in database
-      const image = await prisma.productImage.findFirst({
-        where: {
-          id: imageId,
-          productId: productId
-        }
-      });
-
-      if (!image) {
-        throw new AppError(
-          'Image not found', 
-          404, 
-          ErrorCodes.NOT_FOUND,
-          [{ message: 'Image not found' }],
-          ErrorSeverity.LOW
-        );
-      }
+      const image = await this.ensureExists(
+        () => this.db.productImage.findFirst({
+          where: { id: imageId, productId }
+        }),
+        'Image'
+      );
 
       // Extract public_id from Cloudinary URL
       const urlParts = image.url.split('/');
-      const publicIdWithExtension = urlParts.slice(-2).join('/'); // folder/filename.ext
-      const publicId = publicIdWithExtension.split('.')[0]; // remove file extension
+      const publicIdWithExtension = urlParts.slice(-2).join('/');
+      const publicId = publicIdWithExtension.split('.')[0];
 
       // Delete from Cloudinary
       if (publicId) {
@@ -517,27 +491,18 @@ class ProductService {
       }
 
       // Delete from database
-      await prisma.productImage.delete({
+      await this.db.productImage.delete({
         where: { id: imageId }
       });
 
       return { success: true };
-    } catch (error: any) {
-      if (error instanceof AppError) {
-        throw error;
-      }
-      throw new AppError(
-        'Feil ved sletting av bilde', 
-        500, 
-        ErrorCodes.INTERNAL_SERVER_ERROR,
-        [{ message: error.message }],
-        ErrorSeverity.HIGH
-      );
-    }
+    }, 'Failed to delete product image');
   }
 
-  // Helper method: Generate unique slug
-  private async generateUniqueSlug(name: string): Promise<string> {
+  /**
+   * Generate unique slug
+   */
+  private async generateUniqueSlug(name: string, excludeId?: string): Promise<string> {
     const slug = name
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
@@ -548,7 +513,22 @@ class ProductService {
     // Check if slug exists and make it unique
     let finalSlug = slug;
     let counter = 1;
-    while (await prisma.product.findUnique({ where: { slug: finalSlug } })) {
+    
+    while (true) {
+      const whereClause: any = { slug: finalSlug };
+      if (excludeId) {
+        const existing = await this.db.product.findFirst({
+          where: { 
+            slug: finalSlug,
+            NOT: { id: excludeId }
+          }
+        });
+        if (!existing) break;
+      } else {
+        const existing = await this.db.product.findUnique({ where: { slug: finalSlug } });
+        if (!existing) break;
+      }
+      
       finalSlug = `${slug}-${counter}`;
       counter++;
     }
@@ -556,9 +536,11 @@ class ProductService {
     return finalSlug;
   }
 
-  // Helper method: Calculate average rating
+  /**
+   * Calculate average rating
+   */
   private async calculateAverageRating(productId: string): Promise<number> {
-    const avgRating = await prisma.review.aggregate({
+    const avgRating = await this.db.review.aggregate({
       where: { productId },
       _avg: { rating: true }
     });
@@ -566,7 +548,9 @@ class ProductService {
     return avgRating._avg.rating ? Number(avgRating._avg.rating.toFixed(1)) : 0;
   }
 
-  // Helper method: Add ratings to products
+  /**
+   * Add ratings to products
+   */
   private async addRatingsToProducts(products: any[]): Promise<any[]> {
     return Promise.all(
       products.map(async (product) => {

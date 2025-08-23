@@ -1,0 +1,21 @@
+{
+  "interactions": [
+    {
+      "timestamp": "2025-08-23T08:00:26.142Z",
+      "query_type": "architecture_advice",
+      "context": {
+        "project_type": "npm-package"
+      },
+      "user_satisfaction": 0.7,
+      "patterns_used": {
+        "query_type": "architecture_advice",
+        "response_type": "architecture_advice",
+        "code_language": "unknown",
+        "complexity_level": "medium"
+      }
+    }
+  ],
+  "learned_patterns": {},
+  "skill_progression": [],
+  "preferences": {}
+}
