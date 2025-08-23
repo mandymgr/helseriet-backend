@@ -97,9 +97,7 @@ class ProductService extends BaseService {
             },
             images: {
               select: { id: true, url: true, altText: true, sortOrder: true, imageType: true, isPrimary: true },
-              where: { imageType: 'FRONT' },
-              orderBy: { isPrimary: 'desc' },
-              take: 1
+              orderBy: { sortOrder: 'asc' }
             },
             _count: {
               select: { reviews: true }
