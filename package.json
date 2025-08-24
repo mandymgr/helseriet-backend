@@ -34,7 +34,6 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@helseriet/shared-types": "file:../shared-types",
     "@prisma/client": "^6.13.0",
     "@sentry/node": "^10.5.0",
     "@sentry/tracing": "^7.120.4",
