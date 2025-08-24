@@ -3,6 +3,7 @@ import { AppError } from '@/middleware/errorHandler';
 import prisma from '@/config/database';
 import { hashSync, compareSync } from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { refreshTokenService } from '@/services/auth/refreshToken.service';
 import { emailService } from '@/services/email/email.service';
 
@@ -21,7 +22,7 @@ class AuthController {
       }
 
       // Check if user already exists
-      const existingUser = await prisma.user.findUnique({
+      const existingUser = await prisma.users.findUnique({
         where: { email }
       });
 
@@ -33,15 +34,17 @@ class AuthController {
       const hashedPassword = hashSync(password, 10);
 
       // Create user
-      const user = await prisma.user.create({
+      const user = await prisma.users.create({
         data: {
+          id: crypto.randomUUID(),
           email,
           password: hashedPassword,
           firstName: firstName || null,
           lastName: lastName || null,
           role: 'CUSTOMER',
           isActive: true,
-          isVerified: false
+          isVerified: false,
+          updatedAt: new Date()
         },
         select: {
           id: true,
@@ -95,7 +98,7 @@ class AuthController {
       }
 
       // Find user
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { email }
       });
 
@@ -215,7 +218,7 @@ class AuthController {
       const hashedPassword = hashSync(newPassword, 10);
 
       // Update user password
-      await prisma.user.update({
+      await prisma.users.update({
         where: { id: userId },
         data: { password: hashedPassword }
       });

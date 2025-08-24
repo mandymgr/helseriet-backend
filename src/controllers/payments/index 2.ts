@@ -3,8 +3,6 @@ import { AuthenticatedRequest } from '@/middleware/auth';
 import { AppError } from '@/middleware/errorHandler';
 import { paymentService, PaymentProvider, stripeService } from '@/services/payments';
 import prisma from '@/config/database';
-import { emailService, OrderConfirmationData } from '@/config/email';
-import { logger } from '@/utils/logger.simple';
 
 class PaymentController {
   async createPaymentIntent(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -21,7 +19,7 @@ class PaymentController {
       }
 
       // Get order details
-      const order = await prisma.orders.findFirst({
+      const order = await prisma.order.findFirst({
         where: { 
           id: orderId,
           userId 
@@ -129,16 +127,6 @@ class PaymentController {
         }
       });
 
-      // Send order confirmation email if payment succeeded
-      if (paymentResult.success) {
-        try {
-          await this.sendOrderConfirmationEmail(payment.orderId);
-        } catch (emailError) {
-          // Log error but don't fail the payment confirmation
-          logger.error(`Failed to send order confirmation email for order ${payment.orderId}:`, emailError);
-        }
-      }
-
       res.status(200).json({
         success: paymentResult.success,
         message: paymentResult.success ? 'Betaling bekreftet' : 'Betaling feilet',
@@ -149,91 +137,6 @@ class PaymentController {
       });
     } catch (error) {
       next(error);
-    }
-  }
-
-  /**
-   * Helper method to send order confirmation email
-   */
-  private async sendOrderConfirmationEmail(orderId: string): Promise<void> {
-    // Get complete order details with items and customer info
-    const order = await prisma.orders.findUnique({
-      where: { id: orderId },
-      include: {
-        order_items: {
-          include: {
-            products: true
-          }
-        },
-        users: true
-      }
-    });
-
-    if (!order || !order.users) {
-      logger.warn(`Cannot send confirmation email: Order ${orderId} or user not found`);
-      return;
-    }
-
-    // Build order confirmation data
-    const orderConfirmationData: OrderConfirmationData = {
-      orderNumber: order.orderNumber || orderId,
-      orderDate: order.createdAt,
-      items: order.order_items.map((item: any) => ({
-        id: item.productId,
-        name: item.productName,
-        description: item.products?.description || '',
-        sku: item.products?.sku || '',
-        quantity: item.quantity,
-        price: Number(item.unitPrice),
-        isSubscription: item.isSubscription || false
-      })),
-      subtotal: Number(order.subtotal || 0),
-      shippingCost: Number(order.shippingAmount || 0),
-      discount: Number(order.discountAmount || 0),
-      discountCode: undefined,
-      totalAmount: Number(order.totalAmount),
-      paymentMethod: 'Online payment', // Field doesn't exist in current schema
-      shipping: {
-        name: order.users.firstName + ' ' + (order.users.lastName || ''),
-        address: '', // Use address relation if needed
-        city: order.shippingCity || '',
-        postalCode: order.shippingPostalCode || '',
-        country: order.shippingCountry || 'Norge',
-        phone: order.users.phone || '',
-        method: 'Standard levering',
-        cost: Number(order.shippingAmount || 0)
-      },
-      estimatedDelivery: '2-4 virkedager'
-    };
-
-    // Send the email
-    await emailService.sendOrderConfirmationEmail(
-      order.email || order.users.email,
-      orderConfirmationData,
-      order.users.firstName || undefined
-    );
-
-    logger.info(`Order confirmation email sent for order ${orderId} to ${order.email || order.users.email}`);
-  }
-
-  /**
-   * Helper to get display name for payment method
-   */
-  private getPaymentMethodDisplayName(paymentMethod: string | null): string {
-    if (!paymentMethod) return 'Ukjent';
-    
-    switch (paymentMethod.toLowerCase()) {
-      case 'stripe':
-      case 'card':
-        return 'Kortbetaling';
-      case 'vipps':
-        return 'Vipps';
-      case 'klarna':
-        return 'Klarna';
-      case 'paypal':
-        return 'PayPal';
-      default:
-        return paymentMethod;
     }
   }
 

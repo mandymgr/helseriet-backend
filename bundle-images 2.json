@@ -1,0 +1,65 @@
+[
+  {
+    "filename": "Beginner-Pack_Bundle_TSC.webp",
+    "bundleName": "Beginner Pack",
+    "cleanName": "beginner-pack",
+    "cloudinaryUrl": "https://res.cloudinary.com/dtagymjm2/image/upload/v1755963747/helseriet/bundles/beginner-pack/bundle_main.jpg",
+    "publicId": "helseriet/bundles/beginner-pack/bundle_main"
+  },
+  {
+    "filename": "BrainPower_Bundle_TSC.webp",
+    "bundleName": "BrainPower",
+    "cleanName": "brainpower",
+    "cloudinaryUrl": "https://res.cloudinary.com/dtagymjm2/image/upload/v1755963749/helseriet/bundles/brainpower/bundle_main.jpg",
+    "publicId": "helseriet/bundles/brainpower/bundle_main"
+  },
+  {
+    "filename": "Get-Well-Soon-Bundle_TSC.webp",
+    "bundleName": "Get Well Soon",
+    "cleanName": "get-well-soon",
+    "cloudinaryUrl": "https://res.cloudinary.com/dtagymjm2/image/upload/v1755963751/helseriet/bundles/get-well-soon/bundle_main.jpg",
+    "publicId": "helseriet/bundles/get-well-soon/bundle_main"
+  },
+  {
+    "filename": "Longevity-Bundle.webp",
+    "bundleName": "Longevity",
+    "cleanName": "longevity",
+    "cloudinaryUrl": "https://res.cloudinary.com/dtagymjm2/image/upload/v1755963753/helseriet/bundles/longevity/bundle_main.jpg",
+    "publicId": "helseriet/bundles/longevity/bundle_main"
+  },
+  {
+    "filename": "Menopause-Support-Bundle_TSC.webp",
+    "bundleName": "Menopause Support",
+    "cleanName": "menopause-support",
+    "cloudinaryUrl": "https://res.cloudinary.com/dtagymjm2/image/upload/v1755963755/helseriet/bundles/menopause-support/bundle_main.jpg",
+    "publicId": "helseriet/bundles/menopause-support/bundle_main"
+  },
+  {
+    "filename": "Mood-Stress_Bundle_TSC.webp",
+    "bundleName": "Mood Stress",
+    "cleanName": "mood-stress",
+    "cloudinaryUrl": "https://res.cloudinary.com/dtagymjm2/image/upload/v1755963758/helseriet/bundles/mood-stress/bundle_main.jpg",
+    "publicId": "helseriet/bundles/mood-stress/bundle_main"
+  },
+  {
+    "filename": "Radiant-Skin_Bundle_TSC.webp",
+    "bundleName": "Radiant Skin",
+    "cleanName": "radiant-skin",
+    "cloudinaryUrl": "https://res.cloudinary.com/dtagymjm2/image/upload/v1755963760/helseriet/bundles/radiant-skin/bundle_main.jpg",
+    "publicId": "helseriet/bundles/radiant-skin/bundle_main"
+  },
+  {
+    "filename": "Working-Man-Support-Bundle_TSC.webp",
+    "bundleName": "Working Man Support",
+    "cleanName": "working-man-support",
+    "cloudinaryUrl": "https://res.cloudinary.com/dtagymjm2/image/upload/v1755963762/helseriet/bundles/working-man-support/bundle_main.jpg",
+    "publicId": "helseriet/bundles/working-man-support/bundle_main"
+  },
+  {
+    "filename": "You-Glow-Girl-Bundle_TSC_2.webp",
+    "bundleName": "You Glow Girl",
+    "cleanName": "you-glow-girl",
+    "cloudinaryUrl": "https://res.cloudinary.com/dtagymjm2/image/upload/v1755963764/helseriet/bundles/you-glow-girl/bundle_main.jpg",
+    "publicId": "helseriet/bundles/you-glow-girl/bundle_main"
+  }
+]
