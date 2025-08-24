@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import { errorHandler } from '@/middleware/errorHandler';
 import { notFoundHandler } from '@/middleware/notFoundHandler';
 import { rateLimiter } from '@/middleware/rateLimiter';
+import { setupSwagger } from '@/config/swagger';
 
 // Import routes
 import authRoutes from '@/routes/auth.routes';
@@ -44,6 +45,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Rate limiting
 app.use(rateLimiter);
+
+// Setup Swagger documentation
+setupSwagger(app);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
