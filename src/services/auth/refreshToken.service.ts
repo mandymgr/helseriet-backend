@@ -52,7 +52,7 @@ class RefreshTokenService {
    */
   async refreshAccessToken(refreshTokenString: string): Promise<TokenPair> {
     // Find refresh token in database
-    const refreshTokenRecord = await prisma.refresh_tokens.findUnique({
+    const refreshTokenRecord = await prisma.refreshToken.findUnique({
       where: { token: refreshTokenString },
       include: { user: true }
     });
@@ -91,7 +91,7 @@ class RefreshTokenService {
    * Revoke a specific refresh token
    */
   async revokeRefreshToken(refreshTokenString: string): Promise<void> {
-    await prisma.refresh_tokens.deleteMany({
+    await prisma.refreshToken.deleteMany({
       where: { token: refreshTokenString }
     });
   }
@@ -100,7 +100,7 @@ class RefreshTokenService {
    * Revoke all refresh tokens for a user (logout from all devices)
    */
   async revokeAllUserTokens(userId: string): Promise<void> {
-    await prisma.refresh_tokens.deleteMany({
+    await prisma.refreshToken.deleteMany({
       where: { userId }
     });
   }
@@ -109,7 +109,7 @@ class RefreshTokenService {
    * Clean up expired refresh tokens (maintenance task)
    */
   async cleanupExpiredTokens(): Promise<number> {
-    const result = await prisma.refresh_tokens.deleteMany({
+    const result = await prisma.refreshToken.deleteMany({
       where: {
         expiresAt: {
           lt: new Date()
@@ -128,7 +128,7 @@ class RefreshTokenService {
     createdAt: Date;
     expiresAt: Date;
   }>> {
-    const tokens = await prisma.refresh_tokens.findMany({
+    const tokens = await prisma.refreshToken.findMany({
       where: {
         userId,
         expiresAt: {
@@ -174,19 +174,19 @@ class RefreshTokenService {
    */
   private async storeRefreshToken(userId: string, token: string, expiresAt: Date): Promise<void> {
     // Clean up old tokens for this user if they have too many
-    const existingTokenCount = await prisma.refresh_tokens.count({
+    const existingTokenCount = await prisma.refreshToken.count({
       where: { userId }
     });
 
     // Limit to 5 active refresh tokens per user (5 devices)
     if (existingTokenCount >= 5) {
-      const oldestTokens = await prisma.refresh_tokens.findMany({
+      const oldestTokens = await prisma.refreshToken.findMany({
         where: { userId },
         orderBy: { createdAt: 'asc' },
         take: existingTokenCount - 4 // Keep 4, remove the rest
       });
 
-      await prisma.refresh_tokens.deleteMany({
+      await prisma.refreshToken.deleteMany({
         where: {
           id: {
             in: oldestTokens.map(t => t.id)
@@ -196,7 +196,7 @@ class RefreshTokenService {
     }
 
     // Store new refresh token
-    await prisma.refresh_tokens.create({
+    await prisma.refreshToken.create({
       data: {
         token,
         userId,

@@ -5,8 +5,18 @@ import { apiRateLimiter } from '@/middleware/rateLimiter';
 
 const router = Router();
 
-// All routes require authentication and API rate limiting
-router.use(authenticate, apiRateLimiter);
+// Apply rate limiting to all routes
+router.use(apiRateLimiter);
+
+// Session-based cart routes (no auth required)
+router.get('/session', cartController.getSessionCart);
+router.post('/session/items', cartController.addToSessionCart);
+router.put('/session/items/:productId', cartController.updateSessionCartItem);
+router.delete('/session/items/:productId', cartController.removeFromSessionCart);
+router.delete('/session', cartController.clearSessionCart);
+
+// Authenticated routes (user must be logged in)
+router.use(authenticate);
 
 // GET /api/cart
 router.get('/', cartController.getCart);

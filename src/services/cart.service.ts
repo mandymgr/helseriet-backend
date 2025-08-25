@@ -348,6 +348,25 @@ export class CartService extends BaseService {
       }
     }
   }
+
+  /**
+   * Get product by ID for session cart
+   */
+  async getProductById(productId: string) {
+    this.validateId(productId, 'Product');
+
+    return this.handleDatabaseOperation(async () => {
+      return this.db.product.findUnique({
+        where: { id: productId },
+        include: {
+          category: true,
+          images: {
+            orderBy: { sortOrder: 'asc' }
+          }
+        }
+      });
+    }, 'Failed to get product');
+  }
 }
 
 export const cartService = new CartService();

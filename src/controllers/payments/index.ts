@@ -21,7 +21,7 @@ class PaymentController {
       }
 
       // Get order details
-      const order = await prisma.orders.findFirst({
+      const order = await prisma.order.findFirst({
         where: { 
           id: orderId,
           userId 
@@ -157,19 +157,19 @@ class PaymentController {
    */
   private async sendOrderConfirmationEmail(orderId: string): Promise<void> {
     // Get complete order details with items and customer info
-    const order = await prisma.orders.findUnique({
+    const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
-        order_items: {
+        items: {
           include: {
-            products: true
+            product: true
           }
         },
-        users: true
+        user: true
       }
     });
 
-    if (!order || !order.users) {
+    if (!order?.user) {
       logger.warn(`Cannot send confirmation email: Order ${orderId} or user not found`);
       return;
     }
@@ -178,11 +178,11 @@ class PaymentController {
     const orderConfirmationData: OrderConfirmationData = {
       orderNumber: order.orderNumber || orderId,
       orderDate: order.createdAt,
-      items: order.order_items.map((item: any) => ({
+      items: order.items.map((item: any) => ({
         id: item.productId,
         name: item.productName,
-        description: item.products?.description || '',
-        sku: item.products?.sku || '',
+        description: item.product?.description || '',
+        sku: item.product?.sku || '',
         quantity: item.quantity,
         price: Number(item.unitPrice),
         isSubscription: item.isSubscription || false
@@ -190,16 +190,16 @@ class PaymentController {
       subtotal: Number(order.subtotal || 0),
       shippingCost: Number(order.shippingAmount || 0),
       discount: Number(order.discountAmount || 0),
-      discountCode: undefined,
+      discountCode: '',
       totalAmount: Number(order.totalAmount),
       paymentMethod: 'Online payment', // Field doesn't exist in current schema
       shipping: {
-        name: order.users.firstName + ' ' + (order.users.lastName || ''),
+        name: order.user.firstName + ' ' + (order.user.lastName || ''),
         address: '', // Use address relation if needed
         city: order.shippingCity || '',
         postalCode: order.shippingPostalCode || '',
         country: order.shippingCountry || 'Norge',
-        phone: order.users.phone || '',
+        phone: order.user.phone || '',
         method: 'Standard levering',
         cost: Number(order.shippingAmount || 0)
       },
@@ -208,12 +208,12 @@ class PaymentController {
 
     // Send the email
     await emailService.sendOrderConfirmationEmail(
-      order.email || order.users.email,
+      order.email || order.user.email,
       orderConfirmationData,
-      order.users.firstName || undefined
+      order.user.firstName || undefined
     );
 
-    logger.info(`Order confirmation email sent for order ${orderId} to ${order.email || order.users.email}`);
+    logger.info(`Order confirmation email sent for order ${orderId} to ${order.email || order.user.email}`);
   }
 
   /**
