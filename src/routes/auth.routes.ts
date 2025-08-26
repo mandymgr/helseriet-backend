@@ -21,6 +21,9 @@ router.post('/login', authRateLimiter, validateRequest(loginValidation), authCon
 // POST /api/auth/logout - No rate limiting needed for logout
 router.post('/logout', authController.logout);
 
+// GET /api/auth/me - Get current user (requires authentication)
+router.get('/me', authenticate, authController.getCurrentUser);
+
 // POST /api/auth/refresh - Apply auth rate limiting
 router.post('/refresh', authRateLimiter, authController.refreshToken);
 

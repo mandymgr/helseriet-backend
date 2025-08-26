@@ -266,6 +266,25 @@ class AuthController {
     }
   }
 
+  async getCurrentUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user?.id;
+      
+      if (!userId) {
+        throw new AppError('Ikke autentisert', 401);
+      }
+      
+      const user = await authService.getUserById(userId);
+
+      res.status(200).json({
+        success: true,
+        data: user
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async refreshToken(req: Request, res: Response, next: NextFunction) {
     try {
       const { refreshToken } = req.body;

@@ -232,6 +232,48 @@ class AuthService extends BaseService {
   }
 
   /**
+   * Get user by ID
+   */
+  async getUserById(userId: string): Promise<{
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    role: string;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  }> {
+    this.validateId(userId, 'User');
+
+    return this.handleDatabaseOperation(async () => {
+      const user = await this.db.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+
+      if (!user) {
+        throw this.createNotFoundError('User');
+      }
+
+      if (!user.isActive) {
+        throw this.createUnauthorizedError('Brukerkonto er deaktivert');
+      }
+
+      return user;
+    }, 'Failed to get user by ID');
+  }
+
+  /**
    * Send welcome email asynchronously (non-blocking)
    */
   private async sendWelcomeEmailAsync(email: string, firstName?: string): Promise<void> {
