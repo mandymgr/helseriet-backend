@@ -1,7 +1,21 @@
-// @ts-nocheck - Temporary disable strict checking for session cart implementation
+// Session cart implementation with proper TypeScript typing
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '@/middleware/auth';
 import { cartService } from '@/services/cart.service';
+
+// Session cart types
+interface SessionCart {
+  items: Array<{
+    id: string;
+    productId: string;
+    quantity: number;
+  }>;
+}
+
+import 'express-session';
+interface SessionRequest extends Request {
+  session: Request['session'];
+}
 
 class CartController {
   async getCart(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -14,7 +28,7 @@ class CartController {
 
       const cart = await cartService.getOrCreateCart(userId);
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         data: cart
       });
@@ -34,7 +48,7 @@ class CartController {
       const { productId, quantity = 1 } = req.body;
       const cartItem = await cartService.addToCart(userId, { productId, quantity });
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: 'Product added to cart',
         data: cartItem
@@ -61,7 +75,7 @@ class CartController {
 
       const updatedItem = await cartService.updateCartItem(userId, itemId, { quantity });
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: 'Cart updated',
         data: updatedItem
@@ -87,7 +101,7 @@ class CartController {
 
       await cartService.removeFromCart(userId, itemId);
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: 'Product removed from cart'
       });
@@ -106,7 +120,7 @@ class CartController {
 
       await cartService.clearCart(userId);
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: 'Cart cleared'
       });
@@ -116,9 +130,9 @@ class CartController {
   }
 
   // Session-based cart methods (no authentication required)
-  async getSessionCart(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async getSessionCart(req: Request, res: Response, next: NextFunction): Promise<Response | void> {
     try {
-      const sessionCart = (req as any).session?.cart || { items: [] };
+      const sessionCart = (req as SessionRequest).session?.cart || { items: [] };
 
       // Populate with product data
       const populatedItems = [];
@@ -143,7 +157,7 @@ class CartController {
         sum + (Number(item.product?.price) || 0) * item.quantity, 0
       );
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         data: {
           id: 'session',
@@ -177,32 +191,33 @@ class CartController {
         });
       }
 
-      // Initialize cart if not exists (temporarily use req as any to bypass session typing)
-      if (!(req as any).session) {
-        (req as any).session = {};
+      // Initialize cart if not exists
+      const sessionReq = req as SessionRequest;
+      if (!sessionReq.session) {
+        sessionReq.session = {} as any;
       }
-      if (!(req as any).session.cart) {
-        (req as any).session.cart = { items: [] };
+      if (!sessionReq.session.cart) {
+        sessionReq.session.cart = { items: [] };
       }
 
       // Check if item already exists
-      const existingItemIndex = (req as any).session.cart.items.findIndex(
-        (item: any) => item.productId === productId
+      const existingItemIndex = sessionReq.session.cart.items.findIndex(
+        (item) => item.productId === productId
       );
 
       if (existingItemIndex >= 0) {
         // Update quantity
-        (req as any).session.cart.items[existingItemIndex].quantity += quantity;
+        sessionReq.session!.cart!.items[existingItemIndex]!.quantity += quantity;
       } else {
         // Add new item
-        (req as any).session.cart.items.push({
+        sessionReq.session.cart.items.push({
           id: `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
           productId,
           quantity
         });
       }
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: 'Product added to cart',
         data: { productId, quantity }
@@ -217,15 +232,16 @@ class CartController {
       const { productId } = req.params;
       const { quantity } = req.body;
 
-      if (!(req as any).session?.cart || !(req as any).session.cart.items) {
+      const sessionReq = req as SessionRequest;
+      if (!sessionReq.session?.cart?.items) {
         return res.status(404).json({
           success: false,
           message: 'Cart not found'
         });
       }
 
-      const itemIndex = (req as any).session.cart.items.findIndex(
-        (item: any) => item.productId === productId
+      const itemIndex = sessionReq.session.cart.items.findIndex(
+        (item) => item.productId === productId
       );
 
       if (itemIndex === -1) {
@@ -235,9 +251,9 @@ class CartController {
         });
       }
 
-      (req as any).session.cart.items[itemIndex].quantity = quantity;
+      sessionReq.session!.cart!.items[itemIndex]!.quantity = quantity;
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: 'Cart item updated',
         data: { productId, quantity }
@@ -251,15 +267,16 @@ class CartController {
     try {
       const { productId } = req.params;
 
-      if (!(req as any).session?.cart || !(req as any).session.cart.items) {
+      const sessionReq = req as SessionRequest;
+      if (!sessionReq.session?.cart?.items) {
         return res.status(404).json({
           success: false,
           message: 'Cart not found'
         });
       }
 
-      const itemIndex = (req as any).session.cart.items.findIndex(
-        (item: any) => item.productId === productId
+      const itemIndex = sessionReq.session.cart.items.findIndex(
+        (item) => item.productId === productId
       );
 
       if (itemIndex === -1) {
@@ -269,9 +286,9 @@ class CartController {
         });
       }
 
-      (req as any).session.cart.items.splice(itemIndex, 1);
+      sessionReq.session.cart!.items.splice(itemIndex, 1);
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: 'Item removed from cart'
       });
@@ -280,14 +297,15 @@ class CartController {
     }
   }
 
-  async clearSessionCart(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async clearSessionCart(req: Request, res: Response, next: NextFunction): Promise<Response | void> {
     try {
-      if (!(req as any).session) {
-        (req as any).session = {};
+      const sessionReq = req as SessionRequest;
+      if (!sessionReq.session) {
+        sessionReq.session = {} as any;
       }
-      (req as any).session.cart = { items: [] };
+      sessionReq.session.cart = { items: [] };
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: 'Cart cleared'
       });

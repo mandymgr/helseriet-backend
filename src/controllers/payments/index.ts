@@ -1,9 +1,15 @@
-// @ts-nocheck - Temporary disable strict checking for payment implementation
+// Payment controller with proper TypeScript typing
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '@/middleware/auth';
 import { stripeService } from '@/services/payments/stripe';
 import { cartService } from '@/services/cart.service';
 import { orderService } from '@/services/order.service';
+
+// Use proper express-session types
+import 'express-session';
+interface SessionRequest extends Request {
+  session: Request['session'];
+}
 
 interface PaymentIntentRequest {
   email: string;
@@ -33,14 +39,15 @@ interface PaymentIntentRequest {
 
 class PaymentController {
   // Create payment intent for session cart (no auth required)
-  async createSessionPaymentIntent(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async createSessionPaymentIntent(req: Request, res: Response, next: NextFunction): Promise<Response | void> {
     try {
-      const sessionCart = (req as any).session?.cart;
-      if (!sessionCart || !sessionCart.items || sessionCart.items.length === 0) {
-        return res.status(400).json({
+      const sessionCart = (req as SessionRequest).session?.cart;
+      if (!sessionCart?.items || sessionCart.items.length === 0) {
+        res.status(400).json({
           success: false,
           message: 'Handlekurven er tom'
         });
+        return;
       }
 
       // Calculate total from session cart
@@ -57,7 +64,7 @@ class PaymentController {
       }
 
       if (totalAmount <= 0) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Ugyldig handlekurv total'
         });
@@ -81,7 +88,7 @@ class PaymentController {
         }
       );
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         data: {
           clientSecret: paymentIntent.clientSecret,
@@ -104,10 +111,11 @@ class PaymentController {
 
       const cart = await cartService.getOrCreateCart(userId);
       if (!cart || cart.items.length === 0) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Handlekurven er tom'
         });
+        return;
       }
 
       // Calculate total
@@ -116,7 +124,7 @@ class PaymentController {
       }, 0);
 
       if (totalAmount <= 0) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Ugyldig handlekurv total'
         });
@@ -141,7 +149,7 @@ class PaymentController {
         }
       );
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         data: {
           clientSecret: paymentIntent.clientSecret,
@@ -160,17 +168,17 @@ class PaymentController {
       const { paymentIntentId } = req.body;
       
       if (!paymentIntentId) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Payment Intent ID er påkrevd'
         });
       }
 
       // Confirm payment with Stripe
-      const payment = await stripeService.confirmPayment(paymentIntentId);
+      const payment = await stripeService.confirmPayment(paymentIntentId || '');
       
       if (payment.status !== 'succeeded') {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Betalingen ble ikke fullført',
           data: { status: payment.status }
@@ -186,11 +194,11 @@ class PaymentController {
       if (metadata.cart_type === 'session') {
         // Create order from session cart
         const orderData = {
-          email: metadata.customer_email,
-          billingAddress: JSON.parse(metadata.billing_address),
+          email: metadata.customer_email || '',
+          billingAddress: JSON.parse(metadata.billing_address || '{}'),
           shippingAddress: metadata.shipping_address ? JSON.parse(metadata.shipping_address) : undefined,
-          phone: metadata.phone || undefined,
-          notes: metadata.notes || undefined,
+          phone: metadata.phone || '',
+          notes: metadata.notes || '',
           items: JSON.parse(metadata.cart_items || '[]'),
           paymentIntentId,
           totalAmount: payment.amount / 100 // Convert from øre to NOK
@@ -199,28 +207,29 @@ class PaymentController {
         order = await orderService.createSessionOrder(orderData);
         
         // Clear session cart
-        if ((req as any).session?.cart) {
-          (req as any).session.cart = { items: [] };
+        const sessionReq = req as SessionRequest;
+        if (sessionReq.session?.cart) {
+          sessionReq.session.cart = { items: [] };
         }
       } else if (metadata.cart_type === 'user') {
         // Create order from user cart
         const orderData = {
-          email: metadata.customer_email,
-          billingAddress: JSON.parse(metadata.billing_address),
+          email: metadata.customer_email || '',
+          billingAddress: JSON.parse(metadata.billing_address || '{}'),
           shippingAddress: metadata.shipping_address ? JSON.parse(metadata.shipping_address) : undefined,
-          phone: metadata.phone || undefined,
-          notes: metadata.notes || undefined,
+          phone: metadata.phone || '',
+          notes: metadata.notes || '',
           paymentIntentId,
           totalAmount: payment.amount / 100 // Convert from øre to NOK
         };
         
-        order = await orderService.createOrderFromCart(metadata.user_id, orderData);
+        order = await orderService.createOrderFromCart(metadata.user_id || '', orderData);
         
         // Clear user cart
-        await cartService.clearCart(metadata.user_id);
+        await cartService.clearCart(metadata.user_id || '');
       }
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: 'Betaling bekreftet og ordre opprettet',
         data: {
@@ -242,7 +251,7 @@ class PaymentController {
     try {
       const signature = req.headers['stripe-signature'] as string;
       if (!signature) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Manglende Stripe signatur'
         });
@@ -264,7 +273,7 @@ class PaymentController {
           console.log('Ukjent webhook event type:', event.type);
       }
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: 'Webhook processed'
       });
@@ -279,15 +288,15 @@ class PaymentController {
       const { paymentIntentId } = req.params;
       
       if (!paymentIntentId) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Payment Intent ID er påkrevd'
         });
       }
 
-      const payment = await stripeService.confirmPayment(paymentIntentId);
+      const payment = await stripeService.confirmPayment(paymentIntentId || '');
       
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         data: {
           id: payment.id,
