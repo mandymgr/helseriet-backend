@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { requireDeleteConfirmation, logDestructiveOperation } from '../middleware/deleteProtection';
 import { backupService } from '../utils/backupService';
 import { PrismaClient } from '@prisma/client';
@@ -8,7 +7,7 @@ const router = Router();
 const prisma = new PrismaClient();
 
 // Create manual backup
-router.post('/backup/create', async (req, res) => {
+router.post('/backup/create', async (req: Request, res: Response) => {
   try {
     const reason = req.body.reason || 'manual';
     const backupPath = await backupService.createBackup(reason);
@@ -29,7 +28,7 @@ router.post('/backup/create', async (req, res) => {
 });
 
 // List available backups
-router.get('/backup/list', async (req, res) => {
+router.get('/backup/list', async (req: Request, res: Response) => {
   try {
     const backups = await backupService.listBackups();
     res.json({
@@ -52,7 +51,7 @@ router.get('/backup/list', async (req, res) => {
 router.delete('/products/bulk', 
   requireDeleteConfirmation('BULK_DELETE_PRODUCTS'),
   logDestructiveOperation('BULK_DELETE_PRODUCTS'),
-  async (req, res) => {
+  async (req: Request, res: Response) => {
     try {
       // Create backup before deletion
       await backupService.createBackup('before_bulk_delete_products');
@@ -60,10 +59,11 @@ router.delete('/products/bulk',
       const { productIds } = req.body;
       
       if (!productIds || !Array.isArray(productIds)) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'productIds array is required'
         });
+        return;
       }
       
       // Delete product images first
@@ -95,7 +95,7 @@ router.delete('/products/bulk',
 router.delete('/database/clear-all',
   requireDeleteConfirmation('CLEAR_ALL_DATABASE'),
   logDestructiveOperation('CLEAR_ALL_DATABASE'),
-  async (req, res) => {
+  async (req: Request, res: Response) => {
     try {
       // Create backup before clearing
       await backupService.createBackup('before_clear_all');
@@ -126,7 +126,7 @@ router.delete('/database/clear-all',
 router.post('/database/restore/:backupFilename',
   requireDeleteConfirmation('RESTORE_FROM_BACKUP'),
   logDestructiveOperation('RESTORE_FROM_BACKUP'),
-  async (req, res) => {
+  async (req: Request, res: Response) => {
     try {
       const { backupFilename } = req.params;
       const backupPath = `backups/${backupFilename}`;
@@ -148,7 +148,7 @@ router.post('/database/restore/:backupFilename',
 );
 
 // Get database statistics
-router.get('/database/stats', async (req, res) => {
+router.get('/database/stats', async (req: Request, res: Response) => {
   try {
     const [products, categories, images, users, configs] = await Promise.all([
       prisma.product.count(),

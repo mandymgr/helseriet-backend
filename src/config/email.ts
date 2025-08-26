@@ -11,6 +11,42 @@ export interface EmailConfig {
   };
 }
 
+export interface OrderItem {
+  id: string;
+  name: string;
+  description?: string;
+  sku?: string;
+  quantity: number;
+  price: number;
+  isSubscription?: boolean;
+}
+
+export interface OrderShipping {
+  name: string;
+  address: string;
+  city: string;
+  postalCode: string;
+  country: string;
+  phone?: string;
+  method: string;
+  cost: number;
+}
+
+export interface OrderConfirmationData {
+  orderNumber: string;
+  orderDate: Date;
+  items: OrderItem[];
+  subtotal: number;
+  shippingCost: number;
+  discount?: number;
+  discountCode?: string;
+  totalAmount: number;
+  paymentMethod: string;
+  shipping: OrderShipping;
+  trackingUrl?: string;
+  estimatedDelivery?: string;
+}
+
 class EmailService {
   private transporter: nodemailer.Transporter;
 
@@ -92,8 +128,7 @@ class EmailService {
 
   async sendOrderConfirmationEmail(
     email: string, 
-    orderNumber: string, 
-    totalAmount: number,
+    orderData: OrderConfirmationData,
     firstName?: string
   ): Promise<void> {
     const name = firstName || 'Kunde';
@@ -104,14 +139,14 @@ class EmailService {
         address: process.env.SMTP_USER || 'noreply@helseriet.no'
       },
       to: email,
-      subject: `Ordrebekreftelse - #${orderNumber}`,
-      html: this.getOrderConfirmationTemplate(name, orderNumber, totalAmount),
-      text: this.getOrderConfirmationTextVersion(name, orderNumber, totalAmount)
+      subject: `Ordrebekreftelse - #${orderData.orderNumber}`,
+      html: this.getOrderConfirmationTemplate(name, orderData),
+      text: this.getOrderConfirmationTextVersion(name, orderData)
     };
 
     try {
       const info = await this.transporter.sendMail(mailOptions);
-      logger.info(`Order confirmation email sent to ${email}`, { messageId: info.messageId, orderNumber });
+      logger.info(`Order confirmation email sent to ${email}`, { messageId: info.messageId, orderNumber: orderData.orderNumber });
     } catch (error) {
       logger.error('Failed to send order confirmation email:', error);
       // Don't throw error - order processing should continue
@@ -244,43 +279,386 @@ Helseriet-teamet
     `;
   }
 
-  private getOrderConfirmationTemplate(name: string, orderNumber: string, totalAmount: number): string {
+  private getOrderConfirmationTemplate(name: string, orderData: OrderConfirmationData): string {
+    const formatDate = (date: Date) => {
+      return date.toLocaleDateString('nb-NO', {
+        day: 'numeric',
+        month: 'long', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    };
+
+    const subscriptionItems = orderData.items.filter(item => item.isSubscription);
+    const oneTimeItems = orderData.items.filter(item => !item.isSubscription);
+
     return `
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Ordrebekreftelse</title>
+        <title>Ordrebekreftelse - Helseriet</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
-            .container { max-width: 600px; margin: 0 auto; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .header { background-color: #9CAF88; padding: 30px; text-align: center; }
-            .header h1 { color: white; margin: 0; font-size: 24px; }
-            .content { padding: 30px; }
-            .content h2 { color: #333; margin-top: 0; }
-            .content p { color: #666; line-height: 1.6; }
-            .order-info { background-color: #f8f8f8; padding: 20px; border-radius: 5px; margin: 20px 0; }
-            .footer { padding: 20px; background-color: #f8f8f8; text-align: center; font-size: 14px; color: #888; }
+            body { 
+                font-family: 'Helvetica Neue', Arial, sans-serif; 
+                margin: 0; 
+                padding: 0; 
+                background-color: #f5f6f4; 
+                line-height: 1.6;
+            }
+            .container { 
+                max-width: 700px; 
+                margin: 0 auto; 
+                background-color: white; 
+                border-radius: 12px; 
+                overflow: hidden; 
+                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                margin-top: 20px;
+                margin-bottom: 20px;
+            }
+            .header { 
+                background: linear-gradient(135deg, #9CAF88 0%, #8BA373 100%); 
+                padding: 40px 30px; 
+                text-align: center; 
+                color: white;
+            }
+            .header h1 { 
+                color: white; 
+                margin: 0; 
+                font-size: 28px; 
+                font-weight: 300;
+                letter-spacing: 1px;
+            }
+            .success-badge {
+                display: inline-block;
+                background-color: rgba(255,255,255,0.2);
+                padding: 8px 20px;
+                border-radius: 25px;
+                margin-top: 15px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            .content { 
+                padding: 40px 30px; 
+            }
+            .content h2 { 
+                color: #2D3436; 
+                margin-top: 0; 
+                font-size: 24px;
+                font-weight: 400;
+            }
+            .content p { 
+                color: #636e72; 
+                line-height: 1.8; 
+                margin: 16px 0;
+            }
+            .order-header {
+                background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                padding: 25px;
+                border-radius: 12px;
+                margin: 30px 0;
+                border-left: 4px solid #9CAF88;
+            }
+            .order-number {
+                font-size: 20px;
+                font-weight: 600;
+                color: #2D3436;
+                margin-bottom: 8px;
+            }
+            .order-date {
+                color: #636e72;
+                font-size: 14px;
+            }
+            .section {
+                margin: 35px 0;
+                padding: 25px;
+                background-color: #fefefe;
+                border: 1px solid #f1f3f4;
+                border-radius: 8px;
+            }
+            .section h3 {
+                color: #2D3436;
+                font-size: 18px;
+                font-weight: 600;
+                margin: 0 0 20px 0;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #f1f3f4;
+            }
+            .item {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                padding: 18px 0;
+                border-bottom: 1px solid #f8f9fa;
+            }
+            .item:last-child {
+                border-bottom: none;
+            }
+            .item-details {
+                flex: 1;
+            }
+            .item-name {
+                font-weight: 600;
+                color: #2D3436;
+                font-size: 16px;
+                margin-bottom: 5px;
+            }
+            .item-description {
+                color: #74b9ff;
+                font-size: 14px;
+                margin-bottom: 8px;
+            }
+            .item-meta {
+                color: #95a5a6;
+                font-size: 13px;
+            }
+            .item-price {
+                font-weight: 600;
+                color: #2D3436;
+                font-size: 16px;
+                text-align: right;
+                min-width: 80px;
+            }
+            .subscription-badge {
+                display: inline-block;
+                background-color: #D4A574;
+                color: white;
+                padding: 3px 10px;
+                border-radius: 15px;
+                font-size: 11px;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-top: 5px;
+            }
+            .summary {
+                background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                padding: 25px;
+                border-radius: 12px;
+                margin: 30px 0;
+            }
+            .summary-row {
+                display: flex;
+                justify-content: space-between;
+                margin: 12px 0;
+                font-size: 15px;
+            }
+            .summary-row.total {
+                border-top: 2px solid #dee2e6;
+                padding-top: 15px;
+                margin-top: 20px;
+                font-weight: 700;
+                font-size: 18px;
+                color: #2D3436;
+            }
+            .discount {
+                color: #00b894;
+            }
+            .shipping-info {
+                background-color: #f8f9fa;
+                padding: 20px;
+                border-radius: 8px;
+                border: 1px solid #e9ecef;
+            }
+            .next-steps {
+                background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+                color: white;
+                padding: 25px;
+                border-radius: 12px;
+                text-align: center;
+                margin: 30px 0;
+            }
+            .next-steps h3 {
+                margin: 0 0 15px 0;
+                font-size: 18px;
+            }
+            .next-steps p {
+                margin: 0;
+                color: rgba(255,255,255,0.9);
+            }
+            .button {
+                display: inline-block;
+                padding: 15px 30px;
+                background: linear-gradient(135deg, #9CAF88 0%, #8BA373 100%);
+                color: white;
+                text-decoration: none;
+                border-radius: 25px;
+                margin: 20px 10px;
+                font-weight: 500;
+                font-size: 14px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                box-shadow: 0 4px 15px rgba(156,175,136,0.3);
+                transition: transform 0.2s ease;
+            }
+            .button:hover {
+                transform: translateY(-2px);
+            }
+            .footer { 
+                padding: 30px; 
+                background-color: #2d3436; 
+                text-align: center; 
+                color: #b2bec3;
+            }
+            .footer h4 {
+                color: white;
+                margin: 0 0 15px 0;
+                font-size: 18px;
+                font-weight: 400;
+            }
+            .footer p {
+                margin: 8px 0;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+            .social-links {
+                margin: 20px 0;
+            }
+            .social-links a {
+                color: #74b9ff;
+                text-decoration: none;
+                margin: 0 10px;
+                font-size: 14px;
+            }
+            @media (max-width: 600px) {
+                .container {
+                    margin: 10px;
+                    border-radius: 8px;
+                }
+                .content {
+                    padding: 20px;
+                }
+                .header {
+                    padding: 30px 20px;
+                }
+                .item {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+                .item-price {
+                    text-align: left;
+                    margin-top: 10px;
+                }
+            }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <h1>Ordrebekreftelse</h1>
-            </div>
-            <div class="content">
-                <h2>Hei ${name}!</h2>
-                <p>Takk for din bestilling hos Helseriet. Vi har mottatt ordren din og behandler den nå.</p>
-                <div class="order-info">
-                    <p><strong>Ordrenummer:</strong> ${orderNumber}</p>
-                    <p><strong>Totalbeløp:</strong> ${totalAmount.toFixed(2)} NOK</p>
+                <h1>🌿 Helseriet</h1>
+                <div class="success-badge">
+                    ✓ Ordre bekreftet
                 </div>
-                <p>Du vil motta en ny e-post når ordren din er sendt med sporingsinformasjon.</p>
-                <p>Hvis du har spørsmål om ordren din, kan du kontakte vår kundeservice.</p>
             </div>
+            
+            <div class="content">
+                <h2>Takk for din bestilling, ${name}! 🎉</h2>
+                <p>Vi har mottatt ordren din og behandler den med en gang. Du vil motta en bekreftelse når varene er sendt.</p>
+                
+                <div class="order-header">
+                    <div class="order-number">Ordrenummer: #${orderData.orderNumber}</div>
+                    <div class="order-date">Bestilt: ${formatDate(orderData.orderDate)}</div>
+                </div>
+
+                ${oneTimeItems.length > 0 ? `
+                <div class="section">
+                    <h3>🛍️ Engangskjøp</h3>
+                    ${oneTimeItems.map(item => `
+                    <div class="item">
+                        <div class="item-details">
+                            <div class="item-name">${item.name}</div>
+                            ${item.description ? `<div class="item-description">${item.description}</div>` : ''}
+                            <div class="item-meta">
+                                ${item.sku ? `Varenr: ${item.sku} • ` : ''}
+                                Antall: ${item.quantity}
+                            </div>
+                        </div>
+                        <div class="item-price">${(item.price * item.quantity).toFixed(0)} kr</div>
+                    </div>
+                    `).join('')}
+                </div>` : ''}
+
+                ${subscriptionItems.length > 0 ? `
+                <div class="section">
+                    <h3>🔄 Abonnement</h3>
+                    ${subscriptionItems.map(item => `
+                    <div class="item">
+                        <div class="item-details">
+                            <div class="item-name">${item.name}</div>
+                            ${item.description ? `<div class="item-description">${item.description}</div>` : ''}
+                            <div class="item-meta">
+                                ${item.sku ? `Varenr: ${item.sku} • ` : ''}
+                                Antall: ${item.quantity} • Månedlig leveranse
+                            </div>
+                            <div class="subscription-badge">Abonnement</div>
+                        </div>
+                        <div class="item-price">${(item.price * item.quantity).toFixed(0)} kr/mnd</div>
+                    </div>
+                    `).join('')}
+                </div>` : ''}
+
+                <div class="section">
+                    <h3>📦 Leveringsadresse</h3>
+                    <div class="shipping-info">
+                        <strong>${orderData.shipping.name}</strong><br>
+                        ${orderData.shipping.address}<br>
+                        ${orderData.shipping.postalCode} ${orderData.shipping.city}<br>
+                        ${orderData.shipping.country}<br>
+                        ${orderData.shipping.phone ? `<br>Telefon: ${orderData.shipping.phone}` : ''}
+                        <br><br>
+                        <strong>Leveringsmåte:</strong> ${orderData.shipping.method}
+                        ${orderData.estimatedDelivery ? `<br><strong>Estimert levering:</strong> ${orderData.estimatedDelivery}` : ''}
+                    </div>
+                </div>
+
+                <div class="summary">
+                    <h3>💰 Betalingsoversikt</h3>
+                    <div class="summary-row">
+                        <span>Delsum</span>
+                        <span>${orderData.subtotal.toFixed(0)} kr</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Frakt (${orderData.shipping.method})</span>
+                        <span>${orderData.shippingCost.toFixed(0)} kr</span>
+                    </div>
+                    ${orderData.discount ? `
+                    <div class="summary-row discount">
+                        <span>Rabatt${orderData.discountCode ? ` (${orderData.discountCode})` : ''}</span>
+                        <span>-${orderData.discount.toFixed(0)} kr</span>
+                    </div>` : ''}
+                    <div class="summary-row total">
+                        <span>Totalt betalt</span>
+                        <span>${orderData.totalAmount.toFixed(0)} kr</span>
+                    </div>
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6; color: #636e72; font-size: 14px;">
+                        <strong>Betalingsmetode:</strong> ${orderData.paymentMethod}
+                    </div>
+                </div>
+
+                <div class="next-steps">
+                    <h3>📬 Hva skjer nå?</h3>
+                    <p>Vi pakker ordren din og sender den innen 1-2 virkedager. Du får beskjed med sporingsnummer når pakken er på vei!</p>
+                </div>
+
+                <div style="text-align: center; margin: 40px 0;">
+                    <a href="${process.env.FRONTEND_URL}/account" class="button">Se mine ordrer</a>
+                    <a href="${process.env.FRONTEND_URL}/produkter" class="button">Fortsett shopping</a>
+                </div>
+            </div>
+
             <div class="footer">
-                <p>Med vennlig hilsen,<br>Helseriet-teamet</p>
+                <h4>Takk for at du valgte Helseriet! 🌱</h4>
+                <p>Vi er her for deg hvis du har spørsmål om ordren din.</p>
+                <div class="social-links">
+                    <a href="${process.env.FRONTEND_URL}/kontakt">Kundeservice</a>
+                    <a href="${process.env.FRONTEND_URL}/retur">Retur & bytte</a>
+                    <a href="${process.env.FRONTEND_URL}/faq">Ofte stillte spørsmål</a>
+                </div>
+                <p style="margin-top: 20px; font-size: 12px; color: #95a5a6;">
+                    Helseriet AS • Denne e-posten ble sendt til deg fordi du har handlet hos oss.
+                </p>
             </div>
         </div>
     </body>
@@ -288,23 +666,100 @@ Helseriet-teamet
     `;
   }
 
-  private getOrderConfirmationTextVersion(name: string, orderNumber: string, totalAmount: number): string {
+  private getOrderConfirmationTextVersion(name: string, orderData: OrderConfirmationData): string {
+    const formatDate = (date: Date) => {
+      return date.toLocaleDateString('nb-NO', {
+        day: 'numeric',
+        month: 'long', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    };
+
+    const subscriptionItems = orderData.items.filter(item => item.isSubscription);
+    const oneTimeItems = orderData.items.filter(item => !item.isSubscription);
+
     return `
-Ordrebekreftelse - Helseriet
+🌿 HELSERIET - Ordrebekreftelse
+
+✓ Ordre bekreftet
 
 Hei ${name}!
 
-Takk for din bestilling hos Helseriet. Vi har mottatt ordren din og behandler den nå.
+Takk for din bestilling hos Helseriet! 🎉
+Vi har mottatt ordren din og behandler den med en gang.
 
-Ordrenummer: ${orderNumber}
-Totalbeløp: ${totalAmount.toFixed(2)} NOK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ORDREINFORMASJON
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Du vil motta en ny e-post når ordren din er sendt med sporingsinformasjon.
+Ordrenummer: #${orderData.orderNumber}
+Bestilt: ${formatDate(orderData.orderDate)}
 
-Hvis du har spørsmål om ordren din, kan du kontakte vår kundeservice.
+${oneTimeItems.length > 0 ? `
+🛍️ ENGANGSKJØP:
+${oneTimeItems.map(item => `
+• ${item.name}
+  ${item.description || ''}
+  ${item.sku ? `Varenr: ${item.sku} • ` : ''}Antall: ${item.quantity}
+  Pris: ${(item.price * item.quantity).toFixed(0)} kr`).join('')}
+` : ''}
+
+${subscriptionItems.length > 0 ? `
+🔄 ABONNEMENT:
+${subscriptionItems.map(item => `
+• ${item.name} (ABONNEMENT)
+  ${item.description || ''}
+  ${item.sku ? `Varenr: ${item.sku} • ` : ''}Antall: ${item.quantity} • Månedlig leveranse
+  Pris: ${(item.price * item.quantity).toFixed(0)} kr/mnd`).join('')}
+` : ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LEVERINGSADRESSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${orderData.shipping.name}
+${orderData.shipping.address}
+${orderData.shipping.postalCode} ${orderData.shipping.city}
+${orderData.shipping.country}
+${orderData.shipping.phone ? `Telefon: ${orderData.shipping.phone}` : ''}
+
+Leveringsmåte: ${orderData.shipping.method}
+${orderData.estimatedDelivery ? `Estimert levering: ${orderData.estimatedDelivery}` : ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💰 BETALINGSOVERSIKT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Delsum: ${orderData.subtotal.toFixed(0)} kr
+Frakt (${orderData.shipping.method}): ${orderData.shippingCost.toFixed(0)} kr
+${orderData.discount ? `Rabatt${orderData.discountCode ? ` (${orderData.discountCode})` : ''}: -${orderData.discount.toFixed(0)} kr\n` : ''}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOTALT BETALT: ${orderData.totalAmount.toFixed(0)} kr
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Betalingsmetode: ${orderData.paymentMethod}
+
+📦 HVA SKJER NÅ?
+
+Vi pakker ordren din og sender den innen 1-2 virkedager. 
+Du får beskjed med sporingsnummer når pakken er på vei!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Se mine ordrer: ${process.env.FRONTEND_URL}/account
+Fortsett shopping: ${process.env.FRONTEND_URL}/produkter
+
+Kundeservice: ${process.env.FRONTEND_URL}/kontakt
+Retur & bytte: ${process.env.FRONTEND_URL}/retur
+
+Takk for at du valgte Helseriet! 🌱
 
 Med vennlig hilsen,
 Helseriet-teamet
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Helseriet AS • Denne e-posten ble sendt til deg fordi du har handlet hos oss.
     `;
   }
 

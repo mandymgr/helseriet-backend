@@ -4,7 +4,7 @@
   "description": "Helseriet E-commerce Backend API",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias",
     "start": "node dist/server.js",
     "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/server.ts",
     "db:generate": "prisma generate",
@@ -34,13 +34,15 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@prisma/client": "^6.13.0",
+    "@prisma/client": "^6.14.0",
     "@sentry/node": "^10.5.0",
     "@sentry/tracing": "^7.120.4",
     "@types/axios": "^0.9.36",
+    "@types/express-session": "^1.18.2",
     "@types/node-fetch": "^2.6.13",
     "@types/nodemailer": "^7.0.1",
     "@types/stripe": "^8.0.416",
+    "@types/swagger-ui-express": "^4.1.8",
     "axios": "^1.11.0",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
@@ -48,6 +50,7 @@
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "express-rate-limit": "^8.0.1",
+    "express-session": "^1.18.2",
     "express-validator": "^7.2.1",
     "form-data": "^4.0.4",
     "helmet": "^8.1.0",
@@ -59,6 +62,8 @@
     "prisma": "^6.13.0",
     "sharp": "^0.34.3",
     "stripe": "^18.4.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0"
   },
@@ -74,13 +79,19 @@
     "@types/node": "^24.2.1",
     "@types/sharp": "^0.31.1",
     "@types/supertest": "^6.0.3",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/webpack-bundle-analyzer": "^4.7.0",
     "concurrently": "^9.2.0",
     "jest": "^30.0.5",
     "nodemon": "^3.1.10",
+    "source-map-explorer": "^2.5.3",
     "supertest": "^7.1.4",
     "ts-jest": "^29.4.1",
     "ts-node": "^10.9.2",
+    "tsc-alias": "^1.8.16",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.9.2"
+    "tsconfig-paths-webpack-plugin": "^4.2.0",
+    "typescript": "^5.9.2",
+    "webpack-bundle-analyzer": "^4.10.2"
   }
 }

@@ -78,3 +78,9 @@ Thumbs.db
 # Prisma
 prisma/migrations/
 !prisma/migrations/.gitkeep
+# Claude Code Coordination System
+.claude-coordination/sessions/
+.claude-coordination/logs/
+.claude-coordination/broadcasts/
+.claude-coordination/locks/
+.claude-coordination/global-state.json

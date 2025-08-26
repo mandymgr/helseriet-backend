@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import { AppError } from '@/middleware/errorHandler';
 
 class StripeService {
-  private stripe: Stripe;
+  public stripe: Stripe; // Expose stripe instance for advanced operations
 
   constructor() {
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
