@@ -113,9 +113,11 @@ export abstract class BaseService {
       throw this.createValidationError(`${resourceName} ID is required`);
     }
 
-    // Simple UUID validation
+    // Support both UUID and cuid formats
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(id)) {
+    const cuidRegex = /^c[a-z0-9]{24}$/i;
+    
+    if (!uuidRegex.test(id) && !cuidRegex.test(id)) {
       throw this.createValidationError(`Invalid ${resourceName.toLowerCase()} ID format`);
     }
   }
